@@ -165,6 +165,13 @@ def read_radiojove_spx(file_spx):
 	if header['file_type'] == 'SPD':
 		notes = extract_radiojove_spd_notes(notes_raw)
 		header['nfreq'] = 1
+
+	header['obsty_id'] = 'ABCDE'
+	header['instr_id'] = 'XXX'
+	if header['file_type'] == 'SPS':
+		header['level'] = 'EDR'
+	if header['file_type'] == 'SPD':
+		header['level'] = 'DDR'
 	
 	print header
 	print notes
@@ -215,6 +222,10 @@ def read_radiojove_spx(file_spx):
 		header['fmin'] = frequency   # MHz
 		header['fmax'] = frequency   # MHz
 		
+	if header['file_type'] == 'SPS':
+		header['product_type'] = ('sp%s_%s' % header['nchannel'],header['nfreq'])
+	if header['file_type'] == 'SPD':
+		header['product_type'] = ('ts%s' % header['nchannel'])
 	
 	header['nsweeps'] = data_length / nbytes_per_step
 	data_raw = []
@@ -263,10 +274,10 @@ def read_radiojove_spx(file_spx):
 	return output
 	
 def master_cdf_name(obsty_id, instr_id, level, cdf_version):
-	return '{}_{}_{}_000000000000_000000000000_V{}.cdf'.format(obsty_id, instr_id, level, cdf_version)
+	return 'radiojove_{}_{}_{}_000000000000_000000000000_V{}.cdf'.format(obsty_id, instr_id, level, cdf_version)
 
 def master_skt_name(obsty_id, instr_id, level, cdf_version):
-	return '{}_{}_{}_000000000000_000000000000_V{}.skt'.format(obsty_id, instr_id, level, cdf_version)
+	return 'radiojove_{}_{}_{}_000000000000_000000000000_V{}.skt'.format(obsty_id, instr_id, level, cdf_version)
 
 def edr_to_cdf(edr,build_cdf_master):
 
@@ -297,7 +308,7 @@ def edr_to_cdf(edr,build_cdf_master):
 	frequency = edr['freq'][0:-1]
 	
 #	Setting CDF output name 
-	cdfout_file = "{}_{}_edr_{:%Y%m%d%H%M}_{:%Y%m%d%H%M}_V{}.cdf".format(edr['header']['obsty_id'], edr['header']['instr_id'], edr['time'][0], edr['time'][ndata-1],cdf_version)
+	cdfout_file = "radiojove_{}_{}_{}_{}_{:%Y%m%d%H%M}_{:%Y%m%d%H%M}_V{}.cdf".format(edr['header']['obsty_id'], edr['header']['instr_id'], edr['header']['level'], edr['header']['product_type'], edr['time'][0], edr['time'][ndata-1],cdf_version)
 	if os.path.exists(cdfout_path+cdfout_file):
 		os.remove(cdfout_path+cdfout_file)
 
@@ -311,15 +322,13 @@ def edr_to_cdf(edr,build_cdf_master):
 	# SETTING VESPA GLOBAL ATTRIBUTES
 	cdfout.attrs['VESPA_time_min'] = jul_date[0]
 	cdfout.attrs['VESPA_time_max'] = jul_date[ndata-1]
-	cdfout.attrs['VESPA_time_sampling_step_min'] = np.amin([jul_date[i+1]-jul_date[i] for i in range(0,ndata-2)])*86400.
-	cdfout.attrs['VESPA_time_sampling_step_max'] = np.amax([jul_date[i+1]-jul_date[i] for i in range(0,ndata-2)])*86400.
+	cdfout.attrs['VESPA_time_sampling_step'] = header['time_step'] #np.median([jul_date[i+1]-jul_date[i] for i in range(0,ndata-2)])*86400.
+	cdfout.attrs['VESPA_time_exp'] = header['time_integ']           #np.median([jul_date[i+1]-jul_date[i] for i in range(0,ndata-2)])*86400.
 	
-	cdfout.attrs['VESPA_spectral_range_min']  = np.amin(frequency)
-	cdfout.attrs['VESPA_spectral_range_max']  = np.amax(frequency)
-#	cdfout.attrs['VESPA_spectral_sampling_step_min'] = np.amin(frequency[i+1]-frequency[i] for i in range(len(frequency)-1))
-#	cdfout.attrs['VESPA_spectral_sampling_step_max'] = np.amax(frequency[i+1]-frequency[i] for i in range(len(frequency)-1))
-#	cdfout.attrs['VESPA_spectral_resolution_min'] = 30.e3
-#	cdfout.attrs['VESPA_spectral_resolution_max'] = 30.e3
+	cdfout.attrs['VESPA_spectral_range_min']  = np.amin(frequency)*1e6
+	cdfout.attrs['VESPA_spectral_range_max']  = np.amax(frequency)*1e6
+	cdfout.attrs['VESPA_spectral_sampling_step'] = np.median(frequency[i+1]-frequency[i] for i in range(len(frequency)-1))*1e6
+	cdfout.attrs['VESPA_spectral_resolution'] = 50.e3
 	
 	# SETTING OTHER GLOBAL ATTRIBUTES
 	cdfout.attrs['Logical_file_id'] = cdfout_file
@@ -328,42 +337,13 @@ def edr_to_cdf(edr,build_cdf_master):
 	cdfout.attrs['Software_version'] = sft_version
 	cdfout.attrs['Software_language'] = 'python'
 	
-	# SETTING UTR-2 GLOBAL ATTRIBUTES
-	cdfout.attrs['UTR2_place']      = edr['header']['place']
-	cdfout.attrs['UTR2_desc']       = edr['header']['desc']
-	cdfout.attrs['UTR2_FFT_Size']   = edr['header']['DSPP']['FFT_Size']   
-	cdfout.attrs['UTR2_MinDSPSize'] = edr['header']['DSPP']['MinDSPSize'] 
-	cdfout.attrs['UTR2_MinDMASize'] = edr['header']['DSPP']['MinDMASize'] 
-	cdfout.attrs['UTR2_DMASizeCnt'] = edr['header']['DSPP']['DMASizeCnt'] 
-	cdfout.attrs['UTR2_DMASize']    = edr['header']['DSPP']['DMASize']    
-	cdfout.attrs['UTR2_Clock_frq']  = edr['header']['DSPP']['Clock_frq']  
-	cdfout.attrs['UTR2_GPS_Synch']  = edr['header']['DSPP']['GPS_Synch']  
-	cdfout.attrs['UTR2_SSht']       = edr['header']['DSPP']['SSht']       
-	cdfout.attrs['UTR2_Mode']       = edr['header']['DSPP']['Mode']       
-	cdfout.attrs['UTR2_WFRch']      = edr['header']['DSPP']['WFRch']      
-	cdfout.attrs['UTR2_Smd']        = edr['header']['DSPP']['Smd']        
-	cdfout.attrs['UTR2_Offt']       = edr['header']['DSPP']['Offt']       
-	cdfout.attrs['UTR2_Lb']         = edr['header']['DSPP']['Lb']         
-	cdfout.attrs['UTR2_Hb']         = edr['header']['DSPP']['Hb']         
-	cdfout.attrs['UTR2_Wb']         = edr['header']['DSPP']['Wb']         
-	cdfout.attrs['UTR2_NAvr']       = edr['header']['DSPP']['NAvr']       
-	cdfout.attrs['UTR2_CAvr']       = edr['header']['DSPP']['CAvr']       
-	cdfout.attrs['UTR2_Weight']     = edr['header']['DSPP']['Weight']     
-	cdfout.attrs['UTR2_DCRem']      = edr['header']['DSPP']['DCRem']      
-	cdfout.attrs['UTR2_ExtSyn']     = edr['header']['DSPP']['ExtSyn']     
-	cdfout.attrs['UTR2_Ch1']        = edr['header']['DSPP']['Ch1']        
-	cdfout.attrs['UTR2_Ch2']        = edr['header']['DSPP']['Ch2']        
-	cdfout.attrs['UTR2_ExtWin']     = edr['header']['DSPP']['ExtWin']     
-	cdfout.attrs['UTR2_Clip']       = edr['header']['DSPP']['Clip']       
-	cdfout.attrs['UTR2_HPF0']       = edr['header']['DSPP']['HPF0']       
-	cdfout.attrs['UTR2_HPF1']       = edr['header']['DSPP']['HPF1']       
-	cdfout.attrs['UTR2_LPF0']       = edr['header']['DSPP']['LPF0']       
-	cdfout.attrs['UTR2_LPF1']       = edr['header']['DSPP']['LPF1']       
-	cdfout.attrs['UTR2_ATT0']       = edr['header']['DSPP']['ATT0']       
-	cdfout.attrs['UTR2_ATT1']       = edr['header']['DSPP']['ATT1']       
-	cdfout.attrs['UTR2_Soft']       = edr['header']['DSPP']['Soft']       
-	cdfout.attrs['UTR2_SVer']       = edr['header']['DSPP']['SVer']       
-	cdfout.attrs['UTR2_DSPv']       = edr['header']['DSPP']['DSPv']       
+	# SETTING RADIOJOVE GLOBAL ATTRIBUTES
+	cdfout.attrs['RJV_'] = edr['header']['']
+	cdfout.attrs['RJV_'] = edr['header']['']
+	cdfout.attrs['RJV_'] = edr['header']['']
+	cdfout.attrs['RJV_'] = edr['header']['']
+	cdfout.attrs['RJV_'] = edr['header']['']
+	cdfout.attrs['RJV_'] = edr['header']['']
 
 
 	# SETTING VARIABLES
@@ -372,7 +352,7 @@ def edr_to_cdf(edr,build_cdf_master):
 	cdfout['JD_TIME'] = jul_date
 	cdfout['FLUX_A'] = edr['data']['spectrum_A']
 	cdfout['FLUX_B'] = edr['data']['spectrum_B']
-	cdfout['Frequency'] = frequency*1e6
+	cdfout['Frequency'] = frequency  # MHz
 	
 	date_start = edr['time'][0]
 	date_stop = edr['time'][ndata-1]
