@@ -1,6 +1,6 @@
 ! Skeleton table for the "RadioJOVE_TS" CDF.
 ! Generated: $generation_date
-! CDF created/modified by CDF V$env.CDF_VERSION
+! CDF created/modified by CDF V3.5.0
 
 \#header
 
@@ -30,21 +30,21 @@
                                              "Physics>Magnetospheric " -
                                              "Science" } .
 
-  "Data_type"           1:    CDF_CHAR     { "${glob.dType.toUpperCase()}" } .
+  "Data_type"           1:    CDF_CHAR     { "DDR" } .
 
-  "Descriptor"          1:    CDF_CHAR     { "${glob.dType}_$glob.pType$var.nVar" } .
+  "Descriptor"          1:    CDF_CHAR     { "ddr_ts1" } .
 
   "Data_version"        1:    CDF_CHAR     { "00" } .
 
-  "Instrument_type"     1:    CDF_CHAR     { "$glob.iType" } .
+  "Instrument_type"     1:    CDF_CHAR     { "Waveform Receiver" } .
 
-  "Logical_file_id"     1:    CDF_CHAR     { "radiojove_${obs.obsname.toLowerCase()}_${obs.recname.toLowerCase()}_${glob.dType}_$glob.pType${var.nVar}_00000000" -
+  "Logical_file_id"     1:    CDF_CHAR     { "radiojove_aj4co_dps_ddr_ts1_00000000" -
                                              "0000_000000000000_v10" } .
 
-  "Logical_source"      1:    CDF_CHAR     { "radiojove_${obs.obsname.toLowerCase()}_${obs.recname.toLowerCase()}" } .
+  "Logical_source"      1:    CDF_CHAR     { "radiojove_aj4co_dps" } .
 
   "Logical_source_description"
-                        1:    CDF_CHAR     { "$glob.iDesc" } .
+                        1:    CDF_CHAR     { "RadioJOVE Single Channel Spectrograph" } .
 
   "File_naming_convention"
                         1:    CDF_CHAR     { "source_descriptor_yyyyMM" -
@@ -52,9 +52,9 @@
 
   "Mission_group"       1:    CDF_CHAR     { "RadioJOVE" } .
 
-  "PI_name"             1:    CDF_CHAR     { "$glob.PiName" } .
+  "PI_name"             1:    CDF_CHAR     { "C.S. Higgins" } .
 
-  "PI_affiliation"      1:    CDF_CHAR     { "$glob.PiAffil" } .
+  "PI_affiliation"      1:    CDF_CHAR     { "MTSU" } .
 
   "Source_name"         1:    CDF_CHAR     { "RadioJOVE" } .
 
@@ -86,10 +86,10 @@
   "Rules_of_use" .
 
   "Skeleton_version"
-                        1:    CDF_CHAR     { "$env.SKT_VERSION" } .
+                        1:    CDF_CHAR     { "1.0" } .
 
   "Software_version"
-                        1:    CDF_CHAR     { "$env.SFT_VERSION" } .
+                        1:    CDF_CHAR     { "1.0" } .
 
   "Time_resolution" .
 
@@ -106,40 +106,22 @@
                         1:    CDF_CHAR     { "0000-01-01T00:00:00.000Z" } .
 
   "PDS_Observation_target"
-#foreach ($item in $target.name)
-#if ($item.hasNext())
-                        $velocityCount:    CDF_CHAR     { "$item" } 
-#else
-                        $velocityCount:    CDF_CHAR     { "$item" } .
-#end
-#end
+                        1:    CDF_CHAR     { "Jupiter" } .
+                        2:    CDF_CHAR     { "Sun" } .
   "PDS_Observation_type"
                         1:    CDF_CHAR     { "Waves" } .
 
   "VESPA_dataproduct_type"
-                        1:    CDF_CHAR     { "${glob.pType.toUpperCase()}>${glob.pTypeFull}" } .
+                        1:    CDF_CHAR     { "TS>Time Series" } .
 
   "VESPA_target_class"  
-#foreach ($item in $target.class)
-#if ($item.hasNext()) 
-                        $velocityCount:    CDF_CHAR     { "$item" }
-#else
-                        $velocityCount:    CDF_CHAR     { "$item" } .
-#end
-#end
 
   "VESPA_target_region" 
-#foreach ($item in $target.region)
-                        $velocityCount:    CDF_CHAR     { "$item" } #end .
+                        1:    CDF_CHAR     { "magnetosphere" }                         2:    CDF_CHAR     { "solar wind" }  .
 
   "VESPA_target_region"
-#foreach ($item in $target.feature)
-#if ($item.hasNext()) 
-                        $velocityCount:    CDF_CHAR     { "$item" }
-#else
-                        $velocityCount:    CDF_CHAR     { "$item" } .
-#end
-#end
+                        1:    CDF_CHAR     { "Type III" } .
+                        2:    CDF_CHAR     { "Io-DAM" } .
 
   "VESPA_time_min"      1:    CDF_REAL8    { 0.0 } .
 
@@ -169,10 +151,10 @@
   "VESPA_access_format" 1:    CDF_CHAR     { "cdf" } .
 
   "RJV_Observer_name"
-                        1:    CDF_CHAR     { "${obs.observr}" } .
+                        1:    CDF_CHAR     { "Dave Typinski" } .
 
   "RJV_Observatory_location"
-                        1:    CDF_CHAR     { "${obs.obsvloc}" } .
+                        1:    CDF_CHAR     { "High Springs, FL, USA" } .
 
   "RJV_Latitude"
                         1:    CDF_REAL8    { 0.0 } .
@@ -319,4 +301,4 @@
   ! RV values were not requested.
 
 
-\#end
+#end

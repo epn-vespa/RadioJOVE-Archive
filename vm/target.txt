@@ -1,0 +1,4 @@
+name = {Jupiter, Sun}
+class = {planet, start}
+region = {magnetosphere, solar wind}
+feature = {Type III, Io-DAM}
