@@ -2,6 +2,7 @@
 import numpy 
 import os
 import struct
+import pprint as pp
 
 # Decoding the primary header section of RSP files
 def load_radiojove_spx_header(hdr_raw):
@@ -27,7 +28,7 @@ def load_radiojove_spx_header(hdr_raw):
 	return header
 
 # decoding the SPS notes header section
-def extract_radiojove_sps_notes(raw_notes):
+def extract_radiojove_sps_notes(raw_notes,debug):
 	
 	notes = {}
 	
@@ -44,10 +45,12 @@ def extract_radiojove_sps_notes(raw_notes):
 	start_index = raw_notes.find('*[[*')
 	stop_index  = raw_notes.find('*]]*')
 	notes['free_text'] = raw_notes[0:start_index]
-	note_list = raw_notes[start_index+4:stop_index].split('\xff')
+	note_list = raw_notes[start_index+4:stop_index].strip('\xff').split('\xff')
 
 	# Looping on note items
 	for note_item in note_list:
+		if debug: 
+			print 'Current Item = %s' % note_item
 		
 		# looping on valid key items
 		for key_item in key_list:
@@ -58,7 +61,8 @@ def extract_radiojove_sps_notes(raw_notes):
 			# checking if current note item contains current key item
 			if note_item[0:key_len] == key_item:
 			
-
+				if debug: 
+					print 'Detected Key = %s' % key_item
 				# if current key item has multiple values, do this
 				if key_item in key_list_multi:
 					
@@ -78,17 +82,24 @@ def extract_radiojove_sps_notes(raw_notes):
 					else:
 						note_index = int(note_item[key_len:key_len+1])
 						note_value = note_item[key_len+1:]
+					if debug: 
+						print 'Index = %s' % note_index
+						print 'Value = %s' % note_value
 
 					# setting value to note item 
-					notes[key_item][note_index] = note_value
+					notes[key_item].append(note_value)
 
 				else:
 					note_value = note_item[key_len:]
 					if key_item in key_list_int:
 						if (key_item == 'RCVR') & (note_value == ''):
 							note_value = '-1'
+						if debug: 
+							print 'Value = %s' % note_value
 						notes[key_item] = int(note_value)
 					else:
+						if debug: 
+							print 'Value = %s' % note_value
 						notes[key_item] = note_value
 
 	if 'DUALSPECFILE' not in notes.keys():
@@ -142,6 +153,27 @@ def extract_radiojove_spd_notes(raw_notes):
 
 	return notes
 
+def display_header(file_spx,debug=False):
+		
+	# Opening file:
+	prim_hdr_length = 156
+	lun = open(file_spx,'rb')
+	# Reading header:
+	prim_hdr_raw = lun.read(prim_hdr_length)
+	header = load_radiojove_spx_header(prim_hdr_raw)
+	pp.pprint(header)
+
+	header['file_type'] = file_spx[-3:].upper()
+	# Reading notes:
+	notes_raw = lun.read(header['note_length'])
+	print notes_raw
+	if header['file_type'] == 'SPS':
+		notes = extract_radiojove_sps_notes(notes_raw,debug)
+	if header['file_type'] == 'SPD':
+		notes = extract_radiojove_spd_notes(notes_raw)
+	pp.pprint(notes)
+	return
+	
 def read_radiojove_spx(file_spx):
 	#file_sps='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/spectrogram/AJ4CO_DPS_150101071000_corrected_using_CA_2014_12_18_B.sps'
 	#file_spd='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/timeseries/AJ4CO_RSP_UT150101000009.spd'
