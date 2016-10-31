@@ -1,0 +1,30 @@
+! Skeleton table for the "RadioJOVE_TS" CDF.
+! Generated: $generation_date
+! CDF created/modified by CDF V$env.CDF_VERSION
+
+\#header
+
+                       CDF NAME: RadioJOVE_TS
+                  DATA ENCODING: PPC
+                       MAJORITY: COLUMN
+                         FORMAT: SINGLE
+
+! Variables  G.Attributes  V.Attributes  Records  Dims  Sizes
+! ---------  ------------  ------------  -------  ----  -----
+     0/2          67          37         0/z      0
+! CDF_COMPRESSION: None
+! (Valid compression: None, GZIP.1-9, RLE.0, HUFF.0, AHUFF.0)
+! CDF_CHECKSUM: MD5
+! (Valid checksum: None, MD5)
+
+\#GLOBALattributes
+
+! Attribute         Entry       Data
+! Name              Number      Type       Value
+! ---------         ------      ----       -----
+
+  "Project"             1:    CDF_CHAR     { "RadioJOVE" } .
+
+  "Discipline"          1:    CDF_CHAR     { "Space " -
+                                             "Physics>Magnetospheric " -
+                                             "Science" } .
