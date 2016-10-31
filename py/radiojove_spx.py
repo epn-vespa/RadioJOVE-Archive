@@ -153,6 +153,7 @@ def extract_radiojove_spd_notes(raw_notes):
 
 	return notes
 
+# function to display header information
 def display_header(file_spx,debug=False):
 		
 	# Opening file:
