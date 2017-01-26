@@ -175,7 +175,7 @@ def display_header(file_spx,debug=False):
 	pp.pprint(notes)
 	return
 	
-def read_radiojove_spx(file_spx):
+def read_radiojove_spx(file_spx,debug=False):
 	#file_sps='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/spectrogram/AJ4CO_DPS_150101071000_corrected_using_CA_2014_12_18_B.sps'
 	#file_spd='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/timeseries/AJ4CO_RSP_UT150101000009.spd'
 	file_size = os.path.getsize(file_spx)
@@ -193,7 +193,7 @@ def read_radiojove_spx(file_spx):
 	# Reading notes:
 	notes_raw = lun.read(header['note_length'])
 	if header['file_type'] == 'SPS':
-		notes = extract_radiojove_sps_notes(notes_raw)
+		notes = extract_radiojove_sps_notes(notes_raw,debug)
 		
 	if header['file_type'] == 'SPD':
 		notes = extract_radiojove_spd_notes(notes_raw)
@@ -256,9 +256,9 @@ def read_radiojove_spx(file_spx):
 		header['fmax'] = frequency   # MHz
 		
 	if header['file_type'] == 'SPS':
-		header['product_type'] = ('sp%s_%s' % header['nchannel'],header['nfreq'])
+		header['product_type'] = ('sp%s_%s' % header['nchannels'],header['nfreq'])
 	if header['file_type'] == 'SPD':
-		header['product_type'] = ('ts%s' % header['nchannel'])
+		header['product_type'] = ('ts%s' % header['nchannels'])
 	
 	header['nsweeps'] = data_length / nbytes_per_step
 	data_raw = []
