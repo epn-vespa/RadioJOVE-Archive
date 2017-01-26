@@ -212,20 +212,20 @@ def read_radiojove_spx(file_spx,debug=False):
 
 	data_length = file_size - prim_hdr_length - header['note_length']
 
-	# nchannel = number of observation feeds 
-	# nfreq    = number of frequency step (1 for SPD)  
-	# nsweep   = number of sweep (SPS) or time steps (SPD)
+	# nfeed = number of observation feeds 
+	# nfreq = number of frequency step (1 for SPD)  
+	# nstep = number of sweep (SPS) or time steps (SPD)
 	
 	# SPS files
 
 	if header['file_type'] == 'SPS':
 		header['nfreq'] = header['nchannels']
 		if notes['DUALSPECFILE']:
-			header['nchannels'] = 2
+			header['nfeed'] = 2
 		else:
-			header['nchannels'] = 1
+			header['nfeed'] = 1
 		
-		nbytes_per_step = (header['nfreq'] * header['nchannels'] + 1) * 2
+		nbytes_per_step = (header['nfreq'] * header['nfeed'] + 1) * 2
 		data_fmt = '<%sH' % (nbytes_per_step/2)
 
 		header['fmin'] = notes['LOWF']/1.E6   # MHz
@@ -236,19 +236,20 @@ def read_radiojove_spx(file_spx,debug=False):
 		
 	if header['file_type'] == 'SPD':
 		header['nfreq'] = 1
+		header['nfeed'] = header['nchannels']
 		
 		if notes['INTEGER_SAVE_FLAG']:
 			nbytes_per_sample = 2 
-			data_fmt = '%sh' % (header['nchannels'])
+			data_fmt = '%sh' % (header['nfeed'])
 		else:
 			nbytes_per_sample = 8
-			data_fmt = '%sd' % (header['nchannels'])
+			data_fmt = '%sd' % (header['nfeed'])
 		
 		if notes['NO_TIME_STAMPS_FLAG']:
-			nbytes_per_step = header['nchannels']*nbytes_per_sample
+			nbytes_per_step = header['nfeed']*nbytes_per_sample
 			data_fmt = '<%s' % (data_fmt)
 		else:
-			nbytes_per_step = header['nchannels']*nbytes_per_sample + 8
+			nbytes_per_step = header['nfeed']*nbytes_per_sample + 8
 			data_fmt = '<1d%s' % (data_fmt)
 		
 		frequency = 20.1
@@ -256,23 +257,23 @@ def read_radiojove_spx(file_spx,debug=False):
 		header['fmax'] = frequency   # MHz
 		
 	if header['file_type'] == 'SPS':
-		header['product_type'] = ('sp%s_%s' % header['nchannels'],header['nfreq'])
+		header['product_type'] = ('sp%s_%s' % (header['nfeed'],header['nfreq']))
 	if header['file_type'] == 'SPD':
-		header['product_type'] = ('ts%s' % header['nchannels'])
+		header['product_type'] = ('ts%s' % header['nfeed'])
 	
-	header['nsweeps'] = data_length / nbytes_per_step
+	header['nstep'] = data_length / nbytes_per_step
 	data_raw = []
 	
-	for i in range(header['nsweeps']):
+	for i in range(header['nstep']):
 		data_raw.append(struct.unpack(data_fmt,lun.read(nbytes_per_step)))
 	
 	lun.close()
 	
 	data = {}
 	if header['file_type'] == 'SPS':
-		for i in range(header['nchannels']):
+		for i in range(header['nfeed']):
 			data['CH%s' % (i+1)] = {}
-			for j in range(header['nsweeps']):
+			for j in range(header['nstep']):
 				data['CH%s' % (i+1)][j] = [data_raw[j][i+2*k] for k in range(header['nfreq'])]
 
 	if header['file_type'] == 'SPD':
@@ -281,19 +282,19 @@ def read_radiojove_spx(file_spx,debug=False):
 		else:
 			jj=1
 		
-		for i in range(header['nchannels']):
+		for i in range(header['nfeed']):
 			data['CH%s' % (i+1)] = {}
-			for j in range(header['nsweeps']):
+			for j in range(header['nstep']):
 				data['CH%s' % (i+1)][j] = data_raw[j][i+jj]
 	
 	if header['file_type'] == 'SPS':
-		time = numpy.arange(header['nsweeps'])/float(header['nsweeps'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+		time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
 	if header['file_type'] == 'SPD':
 		if notes['NO_TIME_STAMPS_FLAG']:
-			time = numpy.arange(header['nsweeps'])/float(header['nsweeps'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+			time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
 		else:
 			time = numpy.array()
-			for i in range(header['nsweeps']):
+			for i in range(header['nstep']):
 				time.append(data_raw[i][0])
 
 
