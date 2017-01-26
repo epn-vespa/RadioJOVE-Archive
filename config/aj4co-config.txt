@@ -1,0 +1,11 @@
+31 Oct 2013 to 01 Aug 2014
+Offset 2000
+Gain 2.0
+
+02 Aug 2014 to 16 Dec 2014
+Offset 1850
+Gain 2.0
+
+26 Jul 2015 to present
+Offset 1975
+Gain 1.95
