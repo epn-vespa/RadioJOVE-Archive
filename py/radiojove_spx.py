@@ -193,7 +193,7 @@ def read_radiojove_spx(file_spx,debug=False):
 	# Reading header:
 	prim_hdr_raw = lun.read(prim_hdr_length)
 	header = load_radiojove_spx_header(prim_hdr_raw)
-	header['file_name'] = file_spx
+	header['file_name'] = os.path.basename(file_spx)
 	header['file_type'] = file_spx[-3:].upper()
 
 	# Reading notes:
@@ -205,8 +205,8 @@ def read_radiojove_spx(file_spx,debug=False):
 		notes = extract_radiojove_spd_notes(notes_raw)
 		header['nfreq'] = 1
 
-	header['obsty_id'] = 'ABCDE'
-	header['instr_id'] = 'XXX'
+	header['obsty_id'] = 'AJ4CO'
+	header['instr_id'] = 'DPS'
 	if header['file_type'] == 'SPS':
 		header['level'] = 'EDR'
 	if header['file_type'] == 'SPD':
@@ -294,17 +294,23 @@ def read_radiojove_spx(file_spx,debug=False):
 				data['CH%s' % (i+1)][j] = data_raw[j][i+jj]
 	
 	if header['file_type'] == 'SPS':
-		time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+		time_step = (header['stop_jdtime']-header['start_jdtime']) / float(header['nstep'])
+		time = numpy.arange(header['nstep'])*time_step+header['start_jdtime']
 	if header['file_type'] == 'SPD':
 		if notes['NO_TIME_STAMPS_FLAG']:
-			time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+			time_step = (header['stop_jdtime']-header['start_jdtime']) / float(header['nstep'])
+			time = numpy.arange(header['nstep'])*time_step+header['start_jdtime']
 		else:
 			time = numpy.array()
 			for i in range(header['nstep']):
 				time.append(data_raw[i][0])
+			time_step = numpy.median(time[1:nstep]-time[0:nstep-1])
 	
 	# transforming times from JD to datetime
 	time = astime.Time(time,format='jd').datetime
+
+	# time sampling step in seconds
+	header['time_sampling_step'] = time_step*86400.
 	
 	output = {}
 	output['header'] = header
@@ -374,116 +380,158 @@ def edr_to_cdf(edr,conf,build_cdf_master):
 	cdfout.attrs['Discipline']      = "Space Physics>Magnetospheric Science"
 	cdfout.attrs['Data_type']       = "{}_{}".format(edr['header']['level'],edr['header']['product_type']).upper()
 	cdfout.attrs['Descriptor']      = "{}_{}".format(edr['header']['obsty_id'], edr['header']['instr_id']).upper()
+
 	cdfout.attrs['Data_version']    = cdf_version
 	cdfout.attrs['Instrument_type'] = "Radio Telescope"
 	cdfout.attrs['Logical_file_id'] = "{}_00000000_v00".format(cdfout.attrs['Logical_source'])
 	cdfout.attrs['Logical_source']  = "radiojove_{}_{}".format(cdfout.attrs['Descriptor'].lower(),cdfout.attrs['Data_type'].lower())
+
 	cdfout.attrs['Logical_source_description'] = obs_description(edr['header']['obsty_id'], edr['header']['instr_id'])
-	cdfout.attrs['File_naming_convention']     ="source_descriptor_datatype_yyyyMMdd_vVV"
+	cdfout.attrs['File_naming_convention'] ="source_descriptor_datatype_yyyyMMdd_vVV"	
 	cdfout.attrs['Mission_group']   = "RadioJOVE"
 	cdfout.attrs['PI_name']         = "Dave Typinski"
+	
 	cdfout.attrs['PI_affiliation']  = "RadioJOVE"
 	cdfout.attrs['Source_name']     = "RadioJOVE"
 	cdfout.attrs['TEXT']            = "RadioJOVE Project data. More info at http://radiojove.org and http://radiojove.gsfc.nasa.gov" 
 	cdfout.attrs['Generated_by]     = ["SkyPipe","RadioJOVE","PADC"]
-	cdfout.attrs['Generation_date]  = "{:%Y%m%d}".format(datetime.datetime.now())
-
-  "LINK_TEXT"           1:    CDF_CHAR     { "Radio-SkyPipe Software " -
-                                             "webpage" }
-                        2:    CDF_CHAR     { "RadioJOVE webpage" }
-                        3:    CDF_CHAR     { "VOParis Data Centre webpage" } .
-
-  "LINK_TITLE"          1:    CDF_CHAR     { "Radio-SkyPipe Software" }
-                        2:    CDF_CHAR     { "RadioJOVE" }
-                        3:    CDF_CHAR     { "VOParis Data Centre" } .
-
-  "HTTP_LINK"           1:    CDF_CHAR     { "http://www.radiosky.com/sk" -
-                                             "ypipeishere.html" }
-                        2:    CDF_CHAR     { "http://radiojove.gsfc.nasa" -
-                                             ".gov" }
-                        3:    CDF_CHAR     { "http://voparis-europlanet." -
-                                             "obspm.fr" } .
-
-  "MODS" .
-
-  "Parents" .
-
-  "Rules_of_use" .
-
-  "Skeleton_version"
-                        1:    CDF_CHAR     { "01" } .
-
-  "Software_version"
-                        1:    CDF_CHAR     { "01" } .
-
-  "Time_resolution" .
-
-  "Acknowledgement" .
-
-  "ADID_ref" .
-
-  "Validate" .
 	
+	cdfout.attrs['Generation_date]  = "{:%Y%m%d}".format(datetime.datetime.now())
+	cdfout.attrs['LINK_TEXT']       = ["Radio-SkyPipe Software available on ","More info on RadioJOVE at ","More info on Europlanet at " ]
+	cdfout.attrs['LINK_TITLE']      = ["Radio-SkyPipe website","NASA/GSFC web page","Paris Astronomical Data Centre"]
+	cdfout.attrs['HTTP_LINK']       = ["http://www.radiosky.com/skypipeishere.html","http://radiojove.gsfc.nasa.gov","http://www.europlanet-vespa.eu" } .
+	
+	cdfout.attrs['MODS']            = ""
+	cdfout.attrs['Rules_of_use']    = "RadioJOVE Data are provided for scientific use. As part of a amateur community project, the RadioJOVE data should be used with careful attention. The RadioJOVE observer of this particular file must be cited or added as a coauthor if the data is central to the study. The RadioJOVE team (radiojove-data@lists.nasa.gov) should also be contacted for any details about publication of studies using this data."
+	cdfout.attrs['Skeleton_version'] = cdf_version
+	cdfout.attrs['Sotfware_version'] = sft_version
+	
+	cdfout.attrs['Time_resolution'] = "{} Seconds".format(str(edr['header']['time_sampling_step']))
+	cdfout.attrs['Acknowledgement'] = "This study is using data from RadioJOVE project data, that are distributed by NASA/PDS/PPI and PADC at Observatoire de Paris (France)."
+	cdfout.attrs['ADID_ref']        = ""
+	cdfout.attrs['Validate']        = ""
+
+	cdfout.attrs['Parent']          = edr['header']['file_name']
+	cdfout.attrs['Software_language'] = 'python'
 
 	# SETTING PDS GLOBAL ATTRIBUTES
-	cdfout.attrs['PDS_Start_time'] = edr['time'][0].isoformat()+'Z'
-	cdfout.attrs['PDS_Stop_time'] = edr['time'][ndata-1].isoformat()+'Z'
+	cdfout.attrs['PDS_Start_time']  = edr['time'][0].isoformat()+'Z'
+	cdfout.attrs['PDS_Stop_time']   = edr['time'][ndata-1].isoformat()+'Z'
+	cdfout.attrs['PDS_Observation_target'] = 'Jupiter'
+	cdfout.attrs['PDS_Observation_type'] = 'Radio'
 	
 	# SETTING VESPA GLOBAL ATTRIBUTES
-	cdfout.attrs['VESPA_time_min'] = jul_date[0]
-	cdfout.attrs['VESPA_time_max'] = jul_date[ndata-1]
+	cdfout.attrs['VESPA_dataproduct_type'] = "DS>Dynamic Spectra"
+	cdfout.attrs['VESPA_target_class'] = "planet"
+	cdfout.attrs['VESPA_target_region'] = "Magnetosphere"
+	cdfout.attrs['VESPA_feature_name'] = "Radio Emissions#Aurora"
+
+	cdfout.attrs['VESPA_time_min']  = jul_date[0]
+	cdfout.attrs['VESPA_time_max']  = jul_date[ndata-1]
 	cdfout.attrs['VESPA_time_sampling_step'] = header['time_step'] #np.median([jul_date[i+1]-jul_date[i] for i in range(0,ndata-2)])*86400.
-	cdfout.attrs['VESPA_time_exp'] = header['time_integ']           #np.median([jul_date[i+1]-jul_date[i] for i in range(0,ndata-2)])*86400.
-	
+	cdfout.attrs['VESPA_time_exp']  = header['time_integ']           #np.median([jul_date[i+1]-jul_date[i] for i in range(0,ndata-2)])*86400.
+
 	cdfout.attrs['VESPA_spectral_range_min']  = np.amin(frequency)*1e6
 	cdfout.attrs['VESPA_spectral_range_max']  = np.amax(frequency)*1e6
 	cdfout.attrs['VESPA_spectral_sampling_step'] = np.median(frequency[i+1]-frequency[i] for i in range(len(frequency)-1))*1e6
 	cdfout.attrs['VESPA_spectral_resolution'] = 50.e3
-	
-	# SETTING OTHER GLOBAL ATTRIBUTES
-	cdfout.attrs['Logical_file_id'] = cdfout_file
-	cdfout.attrs['Data_version'] = dat_version
-	cdfout.attrs['Skeleton_version'] = cdf_version
-	cdfout.attrs['Software_version'] = sft_version
-	cdfout.attrs['Software_language'] = 'python'
-	
+
+	cdfout.attrs['VESPA_instrument_host_name'] = edr['header']['obsty_id']
+	cdfout.attrs['VESPA_instrument_name'] = edr['header']['instr_id']
+	cdfout.attrs['VESPA_measurement_type'] = "phys.flux;em.radio
+	cdfout.attrs['VESPA_access_format'] = "application/x-cdf"
+		
 	# SETTING RADIOJOVE GLOBAL ATTRIBUTES
-	cdfout.attrs['RJV_'] = edr['header']['']
-	cdfout.attrs['RJV_'] = edr['header']['']
-	cdfout.attrs['RJV_'] = edr['header']['']
-	cdfout.attrs['RJV_'] = edr['header']['']
-	cdfout.attrs['RJV_'] = edr['header']['']
-	cdfout.attrs['RJV_'] = edr['header']['']
 
+	cdfout.attrs['RadioJOVE_observer_name'] = edr['header']['author']
+	cdfout.attrs['RadioJOVE_observatory_location'] = edr['header']['obsloc']
+#	cdfout.attrs['RadioJOVE_observatory_latitude'] = edr['header']['']
+#	cdfout.attrs['RadioJOVE_observatory_longitude'] = edr['header']['']
+#	cdfout.attrs['RadioJOVE_dipole_orientation_angle'] = edr['header']['']
+#	cdfout.attrs['RadioJOVE_n_channel'] = edr['header']['']
 
-	# SETTING VARIABLES
-	cdfout['Epoch'] = edr['time']
-	cdfout['ISO_DATE'] = [d.isoformat()+'Z' for d in edr['time']]
-	cdfout['JD_TIME'] = jul_date
-	cdfout['FLUX_A'] = edr['data']['spectrum_A']
-	cdfout['FLUX_B'] = edr['data']['spectrum_B']
-	cdfout['Frequency'] = frequency  # MHz
-	
 	date_start = edr['time'][0]
 	date_stop = edr['time'][ndata-1]
 	date_start_round = edr['time'][0].replace(minute=0, second=0, microsecond=0)
 	date_stop_round = edr['time'][ndata-1].replace(minute=0, second=0, microsecond=0)+datetime.timedelta(hours=1)
-	
-	# SETTING VARIABLES ATTRIBUTES
-	cdfout['Epoch'].attrs['VALIDMIN'] = date_start
-	cdfout['Epoch'].attrs['VALIDMAX'] = date_stop
-	cdfout['Epoch'].attrs['SCALEMIN'] = date_start_round
-	cdfout['Epoch'].attrs['SCALEMAX'] = date_stop_round
-	
-	cdfout['ISO_DATE'].attrs['VALIDMIN'] = date_start.isoformat()+'Z'
-	cdfout['ISO_DATE'].attrs['VALIDMAX'] = date_stop.isoformat()+'Z'
-	cdfout['ISO_DATE'].attrs['SCALEMIN'] = date_start_round.isoformat()+'Z'
-	cdfout['ISO_DATE'].attrs['SCALEMAX'] = date_stop_round.isoformat()+'Z'
-	
-	cdfout['JD_TIME'].attrs['VALIDMIN'] = Time(date_start,format="datetime",scale="utc").jd
-	cdfout['JD_TIME'].attrs['VALIDMAX'] = Time(date_stop,format="datetime",scale="utc").jd
-	cdfout['JD_TIME'].attrs['SCALEMIN'] = Time(date_start_round,format="datetime",scale="utc").jd
-	cdfout['JD_TIME'].attrs['SCALEMAX'] = Time(date_stop_round,format="datetime",scale="utc").jd
+
+	# SETTING UP VARIABLES AND VARIABLE ATTRIBUTES
+	cdfout.new('EPOCH',data=edr['time'],type=pycdf.const.CDF_TIME_TT2000,compress=pycdf.const.NO_COMPRESSION)
+	cdfout['EPOCH'].attrs.new('VALIDMIN',data=date_start,type=pycdf.const.CDF_TIME_TT2000)
+	cdfout['EPOCH'].attrs.new('VALIDMAX',data=date_stop,type=pycdf.const.CDF_TIME_TT2000)
+	cdfout['EPOCH'].attrs.new('SCALEMIN',data=date_start_round,type=pycdf.const.CDF_TIME_TT2000)
+	cdfout['EPOCH'].attrs.new('SCALEMAX',data=date_stop_round,type=pycdf.const.CDF_TIME_TT2000)
+    cdfout['EPOCH'].attrs['CATDESC']  = "Default time (TT2000)"
+    cdfout['EPOCH'].attrs['FIELDNAM'] = "Epoch"
+	cdfout['EPOCH'].attrs.new('FILLVAL',data=-9223372036854775808,type=pycdf.const.CDF_TIME_TT2000)
+    cdfout['EPOCH'].attrs['LABLAXIS'] = "Epoch"
+    cdfout['EPOCH'].attrs['UNITS']    = "ns" 
+    cdfout['EPOCH'].attrs['VAR_TYPE'] = "support_data"
+    cdfout['EPOCH'].attrs['SCALETYP'] = "linear" 
+	cdfout['EPOCH'].attrs['MONOTON']  = "INCREASE"
+	cdfout['EPOCH'].attrs['TIME_BASE'] = "J2000" 
+	cdfout['EPOCH'].attrs['TIME_SCALE'] = "UTC" 
+	cdfout['EPOCH'].attrs['REFERENCE_POSITION'] = "Earth"
+	cdfout['EPOCH'].attrs['SI_CONVERSION'] = "1.0e-9>s" 
+	cdfout['EPOCH'].attrs['UCD']      = "time.epoch"
+
+
+	cdfout.new('RR',data=edr['data']['spectrum_A'], type=pycdf.const.CDF_REAL4,compress=pycdf.const.NO_COMPRESSION)
+    cdfout['RR'].attrs['CATDESC'] = "RCP Flux Density"
+    cdfout['RR'].attrs['DEPEND_0'] = "EPOCH"
+    cdfout['RR'].attrs['DEPEND_1'] = "FREQUENCY"
+	cdfout['RR'].attrs['DICT_KEY'] = "electric_field>power"
+	cdfout['RR'].attrs['DISPLAY_TYPE' ] = "spectrogram" 
+	cdfout['RR'].attrs['FIELDNAM'] = "RR" 
+	cdfout['RR'].attrs.new('FILLVAL',data=-1.0e+31,type=pycdf.const.CDF_REAL4}
+	cdfout['RR'].attrs['FORMAT'] = "E12.2"
+	cdfout['RR'].attrs['LABLAXIS'] = "RCP Power Spectral Density" 
+	cdfout['RR'].attrs['UNITS'] = "ADU" 
+	cdfout['RR'].attrs.new('VALIDMIN',data=0.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs.new('VALIDMAX',data=5000.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs['VAR_TYPE'] = "data"
+	cdfout['RR'].attrs['SCALETYP'] = "linear"
+	cdfout['RR'].attrs.new('SCALEMIN',data=0.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs.new('SCALEMAX',data=5000.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs['SI_CONVERSION'] = " " 
+	cdfout['RR'].attrs['UCD'] = "phys.flux;em.radio"
+
+	cdfout.new('LL',data=edr['data']['spectrum_A'], type=pycdf.const.CDF_REAL4,compress=pycdf.const.NO_COMPRESSION)
+    cdfout['RR'].attrs['CATDESC'] = "LCP Flux Density"
+    cdfout['RR'].attrs['DEPEND_0'] = "EPOCH"
+    cdfout['RR'].attrs['DEPEND_1'] = "FREQUENCY"
+	cdfout['RR'].attrs['DICT_KEY'] = "electric_field>power"
+	cdfout['RR'].attrs['DISPLAY_TYPE' ] = "spectrogram" 
+	cdfout['RR'].attrs['FIELDNAM'] = "LL" 
+	cdfout['RR'].attrs.new('FILLVAL',data=-1.0e+31,type=pycdf.const.CDF_REAL4}
+	cdfout['RR'].attrs['FORMAT'] = "E12.2"
+	cdfout['RR'].attrs['LABLAXIS'] = "LCP Power Spectral Density" 
+	cdfout['RR'].attrs['UNITS'] = "ADU" 
+	cdfout['RR'].attrs.new('VALIDMIN',data=0.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs.new('VALIDMAX',data=5000.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs['VAR_TYPE'] = "data"
+	cdfout['RR'].attrs['SCALETYP'] = "linear"
+	cdfout['RR'].attrs.new('SCALEMIN',data=0.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs.new('SCALEMAX',data=5000.0,type=pycdf.const.CDF_REAL4)
+	cdfout['RR'].attrs['SI_CONVERSION'] = " " 
+	cdfout['RR'].attrs['UCD'] = "phys.flux;em.radio"
+
+	cdfout.new('FREQUENCY',data=frequency, type=pycdf.const.CDF_FLOAT,compress=pycdf.const.NO_COMPRESSION, recVary=False)
+    cdfout['FREQUENCY'].attrs['CATDESC'] = "Frequency"
+	cdfout['FREQUENCY'].attrs['DICT_KEY'] = "electric_field>power"
+	cdfout['FREQUENCY'].attrs['FIELDNAM'] = "FREQUENCY" 
+	cdfout['FREQUENCY'].attrs.new('FILLVAL',data=-1.0e+31,type=pycdf.const.CDF_REAL4}
+	cdfout['FREQUENCY'].attrs['FORMAT'] = "F6.3"
+	cdfout['FREQUENCY'].attrs['LABLAXIS'] = "Frequency" 
+	cdfout['FREQUENCY'].attrs['UNITS'] = "MHz" 
+	cdfout['FREQUENCY'].attrs.new('VALIDMIN',data=1.0,type=pycdf.const.CDF_REAL4)
+	cdfout['FREQUENCY'].attrs.new('VALIDMAX',data=40.,type=pycdf.const.CDF_REAL4)
+	cdfout['FREQUENCY'].attrs['VAR_TYPE'] = "support_data"
+	cdfout['FREQUENCY'].attrs['SCALETYP'] = "linear"
+	cdfout['FREQUENCY'].attrs.new('SCALEMIN',data=10.,type=pycdf.const.CDF_REAL4)
+	cdfout['FREQUENCY'].attrs.new('SCALEMAX',data=40.,type=pycdf.const.CDF_REAL4)
+	cdfout['FREQUENCY'].attrs['SI_CONVERSION'] = "1.0e6>Hz" 
+	cdfout['FREQUENCY'].attrs['UCD'] = "em.freq"
 	
 	cdfout.close()
 
