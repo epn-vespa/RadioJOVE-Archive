@@ -3,6 +3,9 @@ import numpy
 import os
 import struct
 import pprint as pp
+import datetime
+from astropy import Time as astime
+from spacepy import pycdf
 
 # Decoding the primary header section of RSP files
 def load_radiojove_spx_header(hdr_raw):
@@ -11,20 +14,22 @@ def load_radiojove_spx_header(hdr_raw):
 	hdr_values = struct.unpack(hdr_fmt,hdr_raw[0:156])
 	
 	header = {}
-	header['sft_version'] = hdr_values[0]
+	header['sft_version']  = hdr_values[0]
 	header['start_jdtime'] = hdr_values[1]-0.5+2415020 # + julday(1,0,1900)
+	header['start_time']   = astime.Time(header['start_jdtime'],format='jd').datetime
 	header['stop_jdtime']  = hdr_values[2]-0.5+2415020 # + julday(1,0,1900)
-	header['latitude'] = hdr_values[3]
-	header['longitude'] = hdr_values[4]
-	header['chartmax'] = hdr_values[5]
-	header['chartmin'] = hdr_values[6]
-	header['timezone'] = hdr_values[7]
-	header['source']  = (hdr_values[8].strip('\x00')).strip(' ')
-	header['author']  = (hdr_values[9].strip('\x00')).strip(' ')
-	header['obsname'] = (hdr_values[10].strip('\x00')).strip(' ')
-	header['obsloc']  = (hdr_values[11].strip('\x00')).strip(' ')
-	header['nchannels'] = hdr_values[12]
-	header['note_length'] = hdr_values[13]
+	header['stop_time']    = astime.Time(header['stop_jdtime'],format='jd').datetime
+	header['latitude']     = hdr_values[3]
+	header['longitude']    = hdr_values[4]
+	header['chartmax']     = hdr_values[5]
+	header['chartmin']     = hdr_values[6]
+	header['timezone']     = hdr_values[7]
+	header['source']       = (hdr_values[8].strip('\x00')).strip(' ')
+	header['author']       = (hdr_values[9].strip('\x00')).strip(' ')
+	header['obsname']      = (hdr_values[10].strip('\x00')).strip(' ')
+	header['obsloc']       = (hdr_values[11].strip('\x00')).strip(' ')
+	header['nchannels']    = hdr_values[12]
+	header['note_length']  = hdr_values[13]
 	return header
 
 # decoding the SPS notes header section
@@ -175,6 +180,7 @@ def display_header(file_spx,debug=False):
 	pp.pprint(notes)
 	return
 	
+# function to read radiojove files (.spd or.sps)
 def read_radiojove_spx(file_spx,debug=False):
 	#file_sps='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/spectrogram/AJ4CO_DPS_150101071000_corrected_using_CA_2014_12_18_B.sps'
 	#file_spd='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/timeseries/AJ4CO_RSP_UT150101000009.spd'
@@ -288,16 +294,18 @@ def read_radiojove_spx(file_spx,debug=False):
 				data['CH%s' % (i+1)][j] = data_raw[j][i+jj]
 	
 	if header['file_type'] == 'SPS':
-		time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+		time = (numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
 	if header['file_type'] == 'SPD':
 		if notes['NO_TIME_STAMPS_FLAG']:
-			time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+			time = (numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
 		else:
 			time = numpy.array()
 			for i in range(header['nstep']):
 				time.append(data_raw[i][0])
-
-
+	
+	# trnasforming times from JD to datetime
+	time = astime.Time(time,format='jd').datetime
+	
 	output = {}
 	output['header'] = header
 	output['notes'] = notes
@@ -307,15 +315,24 @@ def read_radiojove_spx(file_spx,debug=False):
 	
 	return output
 	
-def master_cdf_name(obsty_id, instr_id, level, cdf_version):
-	return 'radiojove_{}_{}_{}_000000000000_000000000000_V{}.cdf'.format(obsty_id, instr_id, level, cdf_version)
+#def master_cdf_name(obsty_id, instr_id, level, cdf_version):
+#	return 'radiojove_{}_{}_{}_000000000000_000000000000_V{}.cdf'.format(obsty_id, instr_id, level, cdf_version)
+#
+#def master_skt_name(obsty_id, instr_id, level, cdf_version):
+#	return 'radiojove_{}_{}_{}_000000000000_000000000000_V{}.skt'.format(obsty_id, instr_id, level, cdf_version)
 
-def master_skt_name(obsty_id, instr_id, level, cdf_version):
-	return 'radiojove_{}_{}_{}_000000000000_000000000000_V{}.skt'.format(obsty_id, instr_id, level, cdf_version)
+def obs_decription(obsty,instr):
+	desc = "RadioJOVE {}".format(obsty.upper())
+	if instr.upper() == 'DPS':
+		desc = "{} Dual Polarization Spectrograph".format(desc)
+	return desc
+	
+def edr_to_cdf(edr,conf,build_cdf_master):
 
-def edr_to_cdf(edr,build_cdf_master):
-
+	config = load_local_config(conf)
 #	setting up variables
+	if config['data_path']['relative_path']:
+		path_seed = 
 	master_path = 'master/'
 	cdfbin_path = '/Applications/cdf/cdf36_0-dist/bin/'
 	cdfout_path = '../data/cdf/V10/'
@@ -324,17 +341,17 @@ def edr_to_cdf(edr,build_cdf_master):
 	sft_version = '03'
 
 #	Setting SKT and CDF names 
-	master_cdf = master_cdf_name(edr['header']['obsty_id'], edr['header']['instr_id'], 'edr', cdf_version)
-	skelet_cdf = master_skt_name(edr['header']['obsty_id'], edr['header']['instr_id'], 'edr', cdf_version)
-	
+#	master_cdf = master_cdf_name(edr['header']['obsty_id'], edr['header']['instr_id'], 'edr', cdf_version)
+#	skelet_cdf = master_skt_name(edr['header']['obsty_id'], edr['header']['instr_id'], 'edr', cdf_version)
+#	
 #	Creating CDF Master (removing it if already there)
-	if build_cdf_master:
-		if os.path.exists(master_path+master_cdf):
-			os.remove(master_path+master_cdf)
-		os.system(cdfbin_path+'skeletoncdf -cdf '+master_path+master_cdf+' '+master_path+skelet_cdf)
-
-	print "Master CDF file name:"
-	print master_cdf
+#	if build_cdf_master:
+#		if os.path.exists(master_path+master_cdf):
+#			os.remove(master_path+master_cdf)
+#		os.system(cdfbin_path+'skeletoncdf -cdf '+master_path+master_cdf+' '+master_path+skelet_cdf)
+#
+#	print "Master CDF file name:"
+#	print master_cdf
 
 #	Creating Time and Frequency Axes 
 	ndata = len(edr['time'])
@@ -342,16 +359,75 @@ def edr_to_cdf(edr,build_cdf_master):
 	frequency = edr['freq'][0:-1]
 	
 #	Setting CDF output name 
-	cdfout_file = "radiojove_{}_{}_{}_{}_{:%Y%m%d%H%M}_{:%Y%m%d%H%M}_V{}.cdf".format(edr['header']['obsty_id'], edr['header']['instr_id'], edr['header']['level'], edr['header']['product_type'], edr['time'][0], edr['time'][ndata-1],cdf_version)
+	cdfout_file = "radiojove_{}_{}_{}_{}_{:%Y%m%d}_V{}.cdf".format(edr['header']['obsty_id'], edr['header']['instr_id'], edr['header']['level'], edr['header']['product_type'], edr['time'][0].date() ,cdf_version)
 	if os.path.exists(cdfout_path+cdfout_file):
 		os.remove(cdfout_path+cdfout_file)
 
 #	Opening CDF object 
-	cdfout = pycdf.CDF(cdfout_path+cdfout_file, master_path+master_cdf)
+	pycdf.lib.set_backward(False)
+	cdfout = pycdf.CDF(cdfout_path+cdfout_file, '')
+	cdfout.col_major(True)
+	cdfout.compress(pycdf.const.NO_COMPRESSION)
+    
+	# SETTING ISTP GLOBAL ATTRIBUTES
+	cdfout.attrs['Project']         = ["PDS>Planetary Data System","PADC>Paris Astronomical Data Centre"]
+	cdfout.attrs['Discipline']      = "Space Physics>Magnetospheric Science"
+	cdfout.attrs['Data_type']       = "{}_{}".format(edr['header']['level'],edr['header']['product_type']).upper()
+	cdfout.attrs['Descriptor']      = "{}_{}".format(edr['header']['obsty_id'], edr['header']['instr_id']).upper()
+	cdfout.attrs['Data_version']    = cdf_version
+	cdfout.attrs['Instrument_type'] = "Radio Telescope"
+	cdfout.attrs['Logical_file_id'] = "{}_00000000_v00".format(cdfout.attrs['Logical_source'])
+	cdfout.attrs['Logical_source']  = "radiojove_{}_{}".format(cdfout.attrs['Descriptor'].lower(),cdfout.attrs['Data_type'].lower())
+	cdfout.attrs['Logical_source_description'] = obs_description(edr['header']['obsty_id'], edr['header']['instr_id'])
+	cdfout.attrs['File_naming_convention']     ="source_descriptor_datatype_yyyyMMdd_vVV"
+	cdfout.attrs['Mission_group']   = "RadioJOVE"
+	cdfout.attrs['PI_name']         = "Dave Typinski"
+	cdfout.attrs['PI_affiliation']  = "RadioJOVE"
+	cdfout.attrs['Source_name']     = "RadioJOVE"
+	cdfout.attrs['TEXT']            = "RadioJOVE Project data. More info at http://radiojove.org and http://radiojove.gsfc.nasa.gov" 
+	cdfout.attrs['Generated_by]     = ["SkyPipe","RadioJOVE","PADC"]
+	cdfout.attrs['Generation_date]  = "{:%Y%m%d}".format(datetime.datetime.now())
+
+  "LINK_TEXT"           1:    CDF_CHAR     { "Radio-SkyPipe Software " -
+                                             "webpage" }
+                        2:    CDF_CHAR     { "RadioJOVE webpage" }
+                        3:    CDF_CHAR     { "VOParis Data Centre webpage" } .
+
+  "LINK_TITLE"          1:    CDF_CHAR     { "Radio-SkyPipe Software" }
+                        2:    CDF_CHAR     { "RadioJOVE" }
+                        3:    CDF_CHAR     { "VOParis Data Centre" } .
+
+  "HTTP_LINK"           1:    CDF_CHAR     { "http://www.radiosky.com/sk" -
+                                             "ypipeishere.html" }
+                        2:    CDF_CHAR     { "http://radiojove.gsfc.nasa" -
+                                             ".gov" }
+                        3:    CDF_CHAR     { "http://voparis-europlanet." -
+                                             "obspm.fr" } .
+
+  "MODS" .
+
+  "Parents" .
+
+  "Rules_of_use" .
+
+  "Skeleton_version"
+                        1:    CDF_CHAR     { "01" } .
+
+  "Software_version"
+                        1:    CDF_CHAR     { "01" } .
+
+  "Time_resolution" .
+
+  "Acknowledgement" .
+
+  "ADID_ref" .
+
+  "Validate" .
+	
 
 	# SETTING PDS GLOBAL ATTRIBUTES
-	cdfout.attrs['PDS_Observation_start_time'] = edr['time'][0].isoformat()+'Z'
-	cdfout.attrs['PDS_Observation_stop_time'] = edr['time'][ndata-1].isoformat()+'Z'
+	cdfout.attrs['PDS_Start_time'] = edr['time'][0].isoformat()+'Z'
+	cdfout.attrs['PDS_Stop_time'] = edr['time'][ndata-1].isoformat()+'Z'
 	
 	# SETTING VESPA GLOBAL ATTRIBUTES
 	cdfout.attrs['VESPA_time_min'] = jul_date[0]
