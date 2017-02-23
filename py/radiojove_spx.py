@@ -294,16 +294,16 @@ def read_radiojove_spx(file_spx,debug=False):
 				data['CH%s' % (i+1)][j] = data_raw[j][i+jj]
 	
 	if header['file_type'] == 'SPS':
-		time = (numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+		time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
 	if header['file_type'] == 'SPD':
 		if notes['NO_TIME_STAMPS_FLAG']:
-			time = (numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
+			time = numpy.arange(header['nstep'])/float(header['nstep'])*(header['stop_jdtime']-header['start_jdtime'])+header['start_jdtime']
 		else:
 			time = numpy.array()
 			for i in range(header['nstep']):
 				time.append(data_raw[i][0])
 	
-	# trnasforming times from JD to datetime
+	# transforming times from JD to datetime
 	time = astime.Time(time,format='jd').datetime
 	
 	output = {}
@@ -329,10 +329,10 @@ def obs_decription(obsty,instr):
 	
 def edr_to_cdf(edr,conf,build_cdf_master):
 
-	config = load_local_config(conf)
 #	setting up variables
-	if config['data_path']['relative_path']:
-		path_seed = 
+#	config = load_local_config(conf)
+#	if config['data_path']['relative_path']:
+#		path_seed = 
 	master_path = 'master/'
 	cdfbin_path = '/Applications/cdf/cdf36_0-dist/bin/'
 	cdfout_path = '../data/cdf/V10/'
