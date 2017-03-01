@@ -1,15 +1,15 @@
 {
 "path":
 	{
-	"cdfout_path": "/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/cdf/tmp/",
-	"cdfbin_path": "/Applications/cdf/cdf/bin/"
-	"cdfpds_path": "/Applications/cdf/cdf/bin/"
+	"out": "/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/cdf/tmp/",
+	"bin": "/Applications/cdf/cdf/bin/",
+	"pds": "/Users/baptiste/Projets/VOParis/igpp-git/pds-cdf-1.0.10/bin/"
 	},
 "vers":
 	{
-	"cdf_version": "10",
-	"dat_version": "00",
-	"sft_version": "03"
+	"cdf": "10",
+	"dat": "00",
+	"sft": "03"
 	},
 "proc":
 	{

@@ -36,7 +36,7 @@ def load_radiojove_spx_header(hdr_raw,debug=False):
 	hdr_values = struct.unpack(hdr_fmt,hdr_raw[0:156])
 	
 	header = {}
-	header['sft_version']  = hdr_values[0]
+	header['sft']  = hdr_values[0]
 	header['start_jdtime'] = hdr_values[1]-0.5+2415020 # + julday(1,0,1900)
 	header['start_time']   = astime.Time(header['start_jdtime'],format='jd').datetime
 	header['stop_jdtime']  = hdr_values[2]-0.5+2415020 # + julday(1,0,1900)
@@ -424,11 +424,14 @@ def close_radiojove_spx(file_info,debug=False):
 ################################################################################
 # Check CDF file with PDS script
 ################################################################################
-def check_radiojove_cdf(file_info,debug=False):
+def check_radiojove_cdf(file_info,config,debug=False):
 	if debug:
 		print "### [check_radiojove_cdf]"
-	
-	os.system(config)
+	if debug:
+		verb = '-v'
+	else:
+		verb = ''
+	os.system("{}check {} {}{}".format(config['path']['pds'],verb,config['path']['out'],file_info['cdfout_file']))
 	return
 
 ################################################################################
@@ -440,17 +443,17 @@ def init_radiojove_cdf(file_info,header,start_time,config,debug=False):
 
 #	Setting CDF output name 
 	if file_info['daily']:
-		file_info['cdfout_file'] = "radiojove_{}_{}_{}_{}_{:%Y%m%d}_V{}.cdf".format(header['obsty_id'], header['instr_id'], header['level'], header['product_type'], start_time.date() ,config['vers']['cdf_version']).lower()
+		file_info['cdfout_file'] = "radiojove_{}_{}_{}_{}_{:%Y%m%d}_V{}.cdf".format(header['obsty_id'], header['instr_id'], header['level'], header['product_type'], start_time.date() ,config['vers']['cdf']).lower()
 	else:
-		file_info['cdfout_file'] = "radiojove_{}_{}_{}_{}_{:%Y%m%d%H%M}_V{}.cdf".format(header['obsty_id'], header['instr_id'], header['level'], header['product_type'], start_time ,config['vers']['cdf_version']).lower()
-	if os.path.exists(config['path']['cdfout_path']+file_info['cdfout_file']):
-		os.remove(config['path']['cdfout_path']+file_info['cdfout_file'])
+		file_info['cdfout_file'] = "radiojove_{}_{}_{}_{}_{:%Y%m%d%H%M}_V{}.cdf".format(header['obsty_id'], header['instr_id'], header['level'], header['product_type'], start_time ,config['vers']['cdf']).lower()
+	if os.path.exists(config['path']['out']+file_info['cdfout_file']):
+		os.remove(config['path']['out']+file_info['cdfout_file'])
 	
-	print "CDF file output: {}".format(config['path']['cdfout_path']+file_info['cdfout_file'])
+	print "CDF file output: {}".format(config['path']['out']+file_info['cdfout_file'])
 		
 #	Opening CDF object 
 	pycdf.lib.set_backward(False)
-	cdfout = pycdf.CDF(config['path']['cdfout_path']+file_info['cdfout_file'],'')
+	cdfout = pycdf.CDF(config['path']['out']+file_info['cdfout_file'],'')
 	cdfout.col_major(True)
 	cdfout.compress(pycdf.const.NO_COMPRESSION)
 
@@ -483,7 +486,7 @@ def write_gattr_radiojove_cdf(cdfout,header,time,freq,config,debug=False):
 	cdfout.attrs['Discipline']      = "Space Physics>Magnetospheric Science"
 	cdfout.attrs['Data_type']       = "{}_{}".format(header['level'],header['product_type']).upper()
 	cdfout.attrs['Descriptor']      = "{}_{}".format(header['obsty_id'],header['instr_id']).upper()
-	cdfout.attrs['Data_version']    = config['vers']['cdf_version']
+	cdfout.attrs['Data_version']    = config['vers']['cdf']
 	cdfout.attrs['Instrument_type'] = "Radio Telescope"
 	cdfout.attrs['Logical_source']  = "radiojove_{}_{}".format(cdfout.attrs['Descriptor'],cdfout.attrs['Data_type']).lower()
 	cdfout.attrs['Logical_file_id'] = "{}_00000000_v00".format(cdfout.attrs['Logical_source'])
@@ -501,8 +504,8 @@ def write_gattr_radiojove_cdf(cdfout,header,time,freq,config,debug=False):
 	cdfout.attrs['HTTP_LINK']       = ["http://www.radiosky.com/skypipeishere.html","http://radiojove.gsfc.nasa.gov","http://www.europlanet-vespa.eu"]
 	cdfout.attrs['MODS']            = ""
 	cdfout.attrs['Rules_of_use']    = "RadioJOVE Data are provided for scientific use. As part of a amateur community project, the RadioJOVE data should be used with careful attention. The RadioJOVE observer of this particular file must be cited or added as a coauthor if the data is central to the study. The RadioJOVE team (radiojove-data@lists.nasa.gov) should also be contacted for any details about publication of studies using this data."
-	cdfout.attrs['Skeleton_version'] = config['vers']['cdf_version']
-	cdfout.attrs['Sotfware_version'] = config['vers']['sft_version']
+	cdfout.attrs['Skeleton_version'] = config['vers']['cdf']
+	cdfout.attrs['Sotfware_version'] = config['vers']['sft']
 	cdfout.attrs['Time_resolution'] = "{} Seconds".format(str(header['time_step']))
 	cdfout.attrs['Acknowledgement'] = "This study is using data from RadioJOVE project data, that are distributed by NASA/PDS/PPI and PADC at Observatoire de Paris (France)."
 	cdfout.attrs['ADID_ref']        = ""
@@ -543,7 +546,7 @@ def write_gattr_radiojove_cdf(cdfout,header,time,freq,config,debug=False):
 	cdfout.attrs['RadioJOVE_observatory_loc'] = header['obsloc']
 	cdfout.attrs['RadioJOVE_observatory_lat'] = header['latitude']
 	cdfout.attrs['RadioJOVE_observatory_lon'] = header['longitude']
-	cdfout.attrs['RadioJOVE_sft_version']     = header['sft_version']
+	cdfout.attrs['RadioJOVE_sft_version']     = header['sft']
 	cdfout.attrs['RadioJOVE_chartmin']  = header['chartmin']
 	cdfout.attrs['RadioJOVE_chartmax']  = header['chartmax']
 	cdfout.attrs['RadioJOVE_nchannels'] = header['nfeed']
