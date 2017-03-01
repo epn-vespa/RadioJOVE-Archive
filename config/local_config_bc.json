@@ -1,1 +1,18 @@
-{"path":{"cdfout_path":"/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/cdf/tmp/","cdfbin_path":"/Applications/cdf/cdf/bin/"},"versions":{"cdf_version":'10',"dat_version":'00',"sft_version":'03'}}
+{
+"path":
+	{
+	"cdfout_path": "/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/cdf/tmp/",
+	"cdfbin_path": "/Applications/cdf/cdf/bin/"
+	"cdfpds_path": "/Applications/cdf/cdf/bin/"
+	},
+"vers":
+	{
+	"cdf_version": "10",
+	"dat_version": "00",
+	"sft_version": "03"
+	},
+"proc":
+	{
+	"packet_size": 10000
+	}
+}
