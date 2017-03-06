@@ -1,7 +1,0 @@
-dType = ddr
-pType = ts
-pTypeFull = Time Series
-iType = Waveform Receiver
-iDesc = RadioJOVE Single Channel Spectrograph
-PiName = C.S. Higgins
-PiAffil = MTSU

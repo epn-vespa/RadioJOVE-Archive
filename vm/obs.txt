@@ -1,6 +1,0 @@
-obsname = AJ4CO
-recname = DPS
-obsdesc = AJ4CO Radio Observatory
-recdesc = Dual Polarization Receiver
-observr = Dave Typinski
-obsvloc = High Springs, FL, USA
