@@ -13,6 +13,32 @@ import json
 # Loading local config file 
 ################################################################################
 def load_local_config(config_file, debug=False):
+    """
+    Loads the local config file (example in ../config)
+    :param config_file: file path to the local config file to be loaded
+    :param debug: Set to True to have verbose output
+    :return config: a dictionary with the local config file content
+
+    The config file must have the following content:
+    {
+    "path":
+        {
+        "out": "where/to/output/cdf/files/",
+        "bin": "/path/to/cdf/library/bin/",
+        "pds": "/path/to/cdf-pds/library/bin/"
+        },
+    "vers":
+        {
+        "cdf": "00", (version of CDF file)
+        "dat": "00", (version of original data file)
+        "sft": "00"  (version of processing software, this one)
+        },
+    "proc":
+        {
+        "packet_size": 10000  (number of time steps to be loaded at once in the main loop)
+        }
+    }
+    """
 
     if debug:
         print "### [load_local_config]"
@@ -30,11 +56,17 @@ def load_local_config(config_file, debug=False):
 # Decoding the primary header section of RSP files
 ################################################################################
 def load_radiojove_spx_header(hdr_raw, debug=False):
+    """
+    Extracts fixed length header keywords from Raw data
+    :param hdr_raw: Raw data (first 156 bytes of the input file)
+    :param debug: Set to True to have verbose output
+    :return header: a dictionary containing the decoded header
+    """
 
     if debug:
         print "### [load_radiojove_spx_header]"
     
-    hdr_fmt = '<10s6d1h10s20s20s40s1h1i'
+    hdr_fmt = '<10s6d1h10s20s20s40s1h1i'  # header format to unpack header
     hdr_values = struct.unpack(hdr_fmt, hdr_raw[0:156])
     
     header = dict(sft=hdr_values[0])
@@ -47,6 +79,7 @@ def load_radiojove_spx_header(hdr_raw, debug=False):
     header['chartmax'] = hdr_values[5]
     header['chartmin'] = hdr_values[6]
     header['timezone'] = hdr_values[7]
+    # For the next 4 header keywords, we remove leading and trailing null (0x00) and space characters
     header['source'] = (hdr_values[8].strip('\x00')).strip(' ')
     header['author'] = (hdr_values[9].strip('\x00')).strip(' ')
     header['obsname'] = (hdr_values[10].strip('\x00')).strip(' ')
@@ -61,13 +94,26 @@ def load_radiojove_spx_header(hdr_raw, debug=False):
 # decoding the SPS notes header section
 ################################################################################
 def extract_radiojove_sps_notes(raw_notes, debug=False):
-
+    """
+    Extracts the extended header information (notes) for SPS files (spectrograph)
+    :param raw_notes: Raw notes (character string)
+    :param debug: Set to True to have verbose output
+    :return notes: dictionary containing the extracted header notes
+    """
     if debug:
         print "### [extract_radiojove_sps_notes]"
     
     notes = {}
-    
-    # list of valid metadata keys
+
+    # The header notes are composed of a series of key and value (KV) pairs.
+    # The raw notes start with a free text space.
+    # The KV pairs section are starting *[[* and finishes with *]]*.
+    # The delimiter between each KV pair is 0xFF.
+    # There is no predefined character for separating key and value within a KV pair.
+    # We must then identify the keys. Some keys have multiple values.
+    # More info: http://www.radiosky.com/skypipehelp/V2/datastructure.html
+
+    # List of known metadata keys
     key_list = ['SWEEPS', 'LOWF', 'HIF', 'STEPS', 'RCVR', 'DUALSPECFILE', 'COLORRES', 'BANNER', 'ANTENNATYPE',
                 'ANTENNAORIENTATION', 'COLORFILE', 'COLOROFFSET', 'COLORGAIN', 'CORRECTIONFILENAME', 'CAXF',
                 'CAX1', 'CAX2', 'CLOCKMSG']
@@ -75,7 +121,7 @@ def extract_radiojove_sps_notes(raw_notes, debug=False):
     # list of metadata keys with multiple values
     key_list_multi = ['BANNER', 'COLOROFFSET', 'COLORGAIN',  'CAXF', 'CAX1', 'CAX2', 'CLOCKMSG']
 
-    # list of metadata keys with interger values
+    # list of metadata keys with integer values
     key_list_int = ['SWEEPS', 'LOWF', 'HIF', 'STEPS', 'RCVR', 'COLORRES', 'COLOROFFSET', 'COLORGAIN']
     
     # stripping raw note text stream from "*[[*" and "*]]*" delimiters, and splitting with '\xff'
@@ -84,12 +130,12 @@ def extract_radiojove_sps_notes(raw_notes, debug=False):
     notes['free_text'] = raw_notes[0:start_index]
     note_list = raw_notes[start_index+4:stop_index].strip('\xff').split('\xff')
 
-    # Looping on note items
+    # Looping on note items to identify what keys are present
     for note_item in note_list:
         if debug: 
-            print 'Current Item = %s' % note_item
+            print 'Current Item = {}'.format(note_item)
         
-        # looping on valid key items
+        # looping on known key items
         for key_item in key_list:
         
             # getting length of key name
@@ -99,11 +145,12 @@ def extract_radiojove_sps_notes(raw_notes, debug=False):
             if note_item[0:key_len] == key_item:
             
                 if debug: 
-                    print 'Detected Key = %s' % key_item
+                    print 'Detected Key = {}'.format(key_item)
+
                 # if current key item has multiple values, do this
                 if key_item in key_list_multi:
                     
-                    # if current key item has multiple values, initializing the list
+                    # if current key item has multiple values, initializing a list for the values
                     if key_item not in notes.keys():
                         notes[key_item] = [] 
 
@@ -120,25 +167,36 @@ def extract_radiojove_sps_notes(raw_notes, debug=False):
                         note_index = int(note_item[key_len:key_len+1])
                         note_value = note_item[key_len+1:]
                     if debug: 
-                        print 'Index = %s' % note_index
-                        print 'Value = %s' % note_value
+                        print 'Index = {}'.format(note_index)
+                        print 'Value = {}'.format(note_value)
 
-                    # setting value to note item 
+                    # adding value to note item
                     notes[key_item].append(note_value)
 
                 else:
+
+                    # key has single value, extracting the value (no delimiter)
                     note_value = note_item[key_len:]
+
+                    # loop on keys that have numeric values
                     if key_item in key_list_int:
+
+                        # special case for RCVR, empty value should be value -1
                         if (key_item == 'RCVR') & (note_value == ''):
                             note_value = '-1'
-                        if debug: 
-                            print 'Value = %s' % note_value
+
+                        if debug:
+                            print 'Value = {}'.format(note_value)
+
                         notes[key_item] = int(note_value)
+
                     else:
+
                         if debug: 
-                            print 'Value = %s' % note_value
+                            print 'Value = {}'.format(note_value)
                         notes[key_item] = note_value
 
+    # final special case: if not present this keyword (no value) says that we deal with single channel spectrograph data
     if 'DUALSPECFILE' not in notes.keys():
         notes['DUALSPECFILE'] = False
     
@@ -149,10 +207,25 @@ def extract_radiojove_sps_notes(raw_notes, debug=False):
 # decoding the SPD notes header section
 ################################################################################
 def extract_radiojove_spd_notes(raw_notes, debug=False):
+    """
+    Extracts the extended header information (notes) for SPD files (radiojove kits)
+    :param raw_notes: Raw notes (character string)
+    :param debug: Set to True to have verbose output
+    :return notes: dictionary containing the extracted header notes
+    """
+
+    # The header notes are composed of a series of key and value (KV) pairs.
+    # The raw notes start with a free text space.
+    # The KV pairs section are starting *[[* and finishes with *]]*.
+    # The delimiter between each KV pair is 0xFF.
+    # There is no predefined character for separating key and value within a KV pair.
+    # We must then identify the keys. Some keys have multiple values.
+    # More info: http://www.radiosky.com/skypipehelp/V2/datastructure.html
 
     if debug:
         print "### [extract_radiojove_spd_notes]"
 
+    # initializing notes with 3 sub dictionaries.
     notes = dict(CHL={}, CHO={}, MetaData={})
 
     start_index = raw_notes.find('*[[*')
@@ -188,8 +261,10 @@ def extract_radiojove_spd_notes(raw_notes, debug=False):
         if note_item[0:7] == 'YALABEL':
             notes['YALABEL'] = note_item[7:]
 
+        # extra metadata are present with a generic syntax Metadata_[KEY][0xC8][VALUE]
         if note_item[0:9] == 'MetaData_':
             item_metadata = note_item.split('\xc8')
+            # removing any extra trailing character in key name (spaces or colon)
             notes['MetaData'][item_metadata[0][9:].strip(' ').strip(':').strip(' ')] = item_metadata[1]
 
     return notes
@@ -199,37 +274,56 @@ def extract_radiojove_spd_notes(raw_notes, debug=False):
 # function to display header information
 ################################################################################
 def display_header(file_spx, debug=False):
+    """
+    Displays header information from a given SPD or SPS file.
+    :param file_spx: input SPS or SPD file
+    :param debug: Set to True to have verbose output
+    """
 
     if debug:
         print "### [display_header]"
         
-    # Opening file:
-    prim_hdr_length = 156
+    # Opening file
     lun = open(file_spx, 'rb')
-    # Reading header:
+
+    # Reading header (156 bytes)
+    prim_hdr_length = 156
     prim_hdr_raw = lun.read(prim_hdr_length)
+
+    # decoding header
     header = load_radiojove_spx_header(prim_hdr_raw)
     pp.pprint(header)
 
+    # file type, from file extension.
     header['file_type'] = file_spx[-3:].upper()
+
     # Reading notes:
     notes_raw = lun.read(header['note_length'])
+
     print notes_raw
+
     if header['file_type'] == 'SPS':
         notes = extract_radiojove_sps_notes(notes_raw, debug)
     elif header['file_type'] == 'SPD':
         notes = extract_radiojove_spd_notes(notes_raw)
     else:
         notes = ''
+
+    lun.close()
+
     pp.pprint(notes)
-    return
 
 
 ################################################################################
 # Open SPx file and return header,notes
 ################################################################################
 def open_radiojove_spx(file_info, debug=False):
-
+    """
+    Opens RadioJOVE SPS or SPD file for processing
+    :param file_info: a dictionary containing the input file information
+    :param debug: Set to True to have verbose output
+    :return header, notes, time, frequency:
+    """
     if debug:
         print "### [open_radiojove_spx]"
     
@@ -396,7 +490,13 @@ def open_radiojove_spx(file_info, debug=False):
 # Read SPx sweep
 ################################################################################
 def read_radiojove_spx_sweep(file_info, packet_size, debug=False):
-
+    """
+    Reads raw data from SPS or SPD file
+    :param file_info: a dictionary containing the input file information
+    :param packet_size: how many sweeps to load at once
+    :param debug: Set to True to have verbose output
+    :return raw:
+    """
     if debug:
         print "### [read_radiojove_spx_sweep]"
         print "loading packet of {} step(s), with format `{}`.".format(packet_size, file_info['data_format'])
@@ -417,17 +517,29 @@ def read_radiojove_spx_sweep(file_info, packet_size, debug=False):
 # Close SPx file
 ################################################################################
 def close_radiojove_spx(file_info, debug=False):
+    """
+    Closes the current SPS or SPD input file
+    :param file_info: a dictionary containing the input file information
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [close_radiojove_spx]"
     
     file_info['lun'].close()
-    return
 
 
 ################################################################################
 # Check CDF file with PDS script
 ################################################################################
 def check_radiojove_cdf(file_info, config, debug=False):
+    """
+    Checks the compliance of the CDF file with PDS archive standard quality
+    :param file_info: a dictionary containing the input file information
+    :param config: a dictionary containing the local path configuration
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [check_radiojove_cdf]"
     if debug:
@@ -435,17 +547,25 @@ def check_radiojove_cdf(file_info, config, debug=False):
     else:
         verb = ''
     os.system("{}cdfcheck {} {}{}".format(config['path']['pds'], verb, config['path']['out'], file_info['cdfout_file']))
-    return
 
 
 ################################################################################
 # Init CDF output file
 ################################################################################
 def init_radiojove_cdf(file_info, header, start_time, config, debug=False):
+    """
+    Initialization of the output CDF file
+    :param file_info: a dictionary containing the input file information
+    :param header: a dictionary containing the input file header
+    :param start_time: datetime object (starting of observation)
+    :param config: a dictionary containing the local configuration
+    :param debug: Set to True to have verbose output
+    :return cdfout: the CDF handle to be used for further CDF operations
+    """
     if debug:
         print "### [init_radiojove_cdf]"
 
-#    Setting CDF output name 
+    # Setting up the CDF output name
     if file_info['daily']:
         file_info['cdfout_file'] = "radiojove_{}_{}_{}_{}_{:%Y%m%d}_V{}.cdf".format(header['obsty_id'],
                                                                                     header['instr_id'],
@@ -460,16 +580,18 @@ def init_radiojove_cdf(file_info, header, start_time, config, debug=False):
                                                                                         header['product_type'],
                                                                                         start_time,
                                                                                         config['vers']['cdf']).lower()
+
+    # removing existing CDF file with same name if necessary (PyCDF cannot overwrite a CDF file)
     if os.path.exists(config['path']['out']+file_info['cdfout_file']):
         os.remove(config['path']['out']+file_info['cdfout_file'])
     
     print "CDF file output: {}".format(config['path']['out']+file_info['cdfout_file'])
         
 #    Opening CDF object 
-    pycdf.lib.set_backward(False)
+    pycdf.lib.set_backward(False)  # this is setting the CDF version to be used
     cdfout = pycdf.CDF(config['path']['out']+file_info['cdfout_file'], '')
-    cdfout.col_major(True)
-    cdfout.compress(pycdf.const.NO_COMPRESSION)
+    cdfout.col_major(True)                         # Column Major
+    cdfout.compress(pycdf.const.NO_COMPRESSION)    # No file level compression
 
     return cdfout
     
@@ -478,17 +600,32 @@ def init_radiojove_cdf(file_info, header, start_time, config, debug=False):
 # Close CDF output file
 ################################################################################
 def close_radiojove_cdf(cdfout, debug=False):
+    """
+    Closes the current output CDF file
+    :param cdfout: CDF file handle to be closed
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [close_radiojove_cdf]"
 
     cdfout.close()
-    return
     
 
 ################################################################################
 # Global Attributes for CDF 
 ################################################################################
 def write_gattr_radiojove_cdf(cdfout, header, time, freq, config, debug=False):
+    """
+    Writes the Global Attributes into the CDF file
+    :param cdfout: CDF file handle to be used
+    :param header: a dictionary containing the input file header
+    :param time: a datetime array (1 value for each sweep)
+    :param freq: an array of frequency values (1 value for each step in a sweep)
+    :param config: a dictionary containing the local configuration
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [write_gattr_radiojove_cdf]"
 
@@ -594,13 +731,19 @@ def write_gattr_radiojove_cdf(cdfout, header, time, freq, config, debug=False):
 
     if debug:
         print cdfout.attrs
-    return
     
 
 ################################################################################
 # EPOCH variable for CDF
 ################################################################################
 def write_epoch_radiojove_cdf(cdfout, time, debug=False):
+    """
+    Writes the EPOCH variable into the output CDF file
+    :param cdfout: CDF file handle to be used
+    :param time: a datetime array (1 value for each sweep)
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [write_epoch_radiojove_cdf]"
 
@@ -609,6 +752,8 @@ def write_epoch_radiojove_cdf(cdfout, time, debug=False):
     date_stop_round = time[ndata-1].replace(minute=0, second=0, microsecond=0)+datetime.timedelta(hours=1)
     
     # SETTING UP VARIABLES AND VARIABLE ATTRIBUTES
+    #   The EPOCH variable type must be CDF_TIME_TT2000
+    #   PDS-CDF requires no compression for variables.
     cdfout.new('EPOCH', data=time, type=pycdf.const.CDF_TIME_TT2000, compress=pycdf.const.NO_COMPRESSION)
     cdfout['EPOCH'].attrs.new('VALIDMIN', data=datetime.datetime(2000, 1, 1), type=pycdf.const.CDF_TIME_TT2000)
     cdfout['EPOCH'].attrs.new('VALIDMAX', data=datetime.datetime(2100, 1, 1), type=pycdf.const.CDF_TIME_TT2000)
@@ -631,16 +776,24 @@ def write_epoch_radiojove_cdf(cdfout, time, debug=False):
     if debug:
         print cdfout['EPOCH']
         print cdfout['EPOCH'].attrs
-    return 
     
 
 ################################################################################
 # FREQUENCY variable for CDF
 ################################################################################
 def write_frequency_radiojove_cdf(cdfout, header, freq, debug=False):
+    """
+    Writes the FREQUENCY variable into the output CDF file
+    :param cdfout: CDF file handle to be used
+    :param header: a dictionary containing the input file header
+    :param freq: an array of frequency values (1 value for each step in a sweep)
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [write_frequency_radiojove_cdf]"
 
+    # PDS-CDF requires no compression for variables.
     cdfout.new('FREQUENCY', data=freq, type=pycdf.const.CDF_FLOAT, compress=pycdf.const.NO_COMPRESSION, recVary=False)
     cdfout['FREQUENCY'].attrs['CATDESC'] = "Frequency"
     cdfout['FREQUENCY'].attrs['DICT_KEY'] = "electric_field>power"
@@ -661,13 +814,21 @@ def write_frequency_radiojove_cdf(cdfout, header, freq, debug=False):
     if debug:
         print cdfout['FREQUENCY']
         print cdfout['FREQUENCY'].attrs
-    return
 
 
 ################################################################################
 # Data variables for CDF
 ################################################################################
 def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False):
+    """
+    Writes DATA variables into output CDF file
+    :param cdfout: CDF file handle to be used
+    :param header: a dictionary containing the input file header
+    :param file_info: a dictionary containing the input file information
+    :param packet_size: how many sweeps to load at once
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [write_data_radiojove_cdf]"
 
@@ -679,6 +840,9 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
         var_name = header['feeds'][i]['FIELDNAM']
         if debug:
             print "Creating {} variable".format(var_name)
+
+        # We deal with EDR data (direct output from experiment) in Unsigned 2-byte integers.
+        #   PDS-CDF requires no compression for variables.
         cdfout.new(var_name, data=numpy.zeros((nt, nf)), type=pycdf.const.CDF_UINT2,
                    compress=pycdf.const.NO_COMPRESSION)
         cdfout[var_name].attrs['CATDESC'] = header['feeds'][i]['CATDESC']
@@ -726,18 +890,24 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
         for i in range(header['nfeed']):
             cdfout[header['feeds'][i]['FIELDNAM']][j1:j2, :] = data_raw[:, :, i]
 
-    return
-
 
 ################################################################################
 # Observatory Descriptions
 ################################################################################
-
 def obs_description(obsty, instr, debug=False):
+    """
+    Loads observatory description
+    :param obsty: Observatory short name (call sign)
+    :param instr: Instrument short name
+    :param debug: Set to True to have verbose output
+    :return desc: a character string with the description of the observatory and instrument
+    """
     if debug:
         print "### [obs_description]"
 
     desc = "RadioJOVE {}".format(obsty.upper())
+
+    # At the moment, only AJ4CO/DPS has been tested.
     if instr.upper() == 'DPS':
         desc = "{} Dual Polarization Spectrograph".format(desc)
     return desc
@@ -747,17 +917,26 @@ def obs_description(obsty, instr, debug=False):
 # Main SPX to CDF 
 ################################################################################
 def spx_to_cdf(file_spx, config_file='local_config_bc.json', daily=False, debug=False):
+    """
+    Main script that transforms an SPS or SPD file into a CDF file
+    :param file_spx: path of input SPS or SPD file
+    :param config_file: path of local configuration file
+    :param daily: Set to true to output daily files (CDF name contains only the date)
+    :param debug: Set to True to have verbose output
+    :return:
+    """
     if debug:
         print "### [spx_to_cdf]"
 
-#    setting up local paths and versions 
+    # setting up local paths, versions and processing parameters
     config = load_local_config(config_file, debug)
 
     # file_sps='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/spectrogram/AJ4CO_DPS_150101071000_corrected_using_CA_2014_12_18_B.sps'
     # file_spd='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/timeseries/AJ4CO_RSP_UT150101000009.spd'
 
+    # initialization file_info dictionary
     file_info = dict(name=file_spx)
-    file_info['daily'] = daily
+    file_info['daily'] = daily  # True or False(=default)
 
     # Opening file, initializing file info and loading header + notes
     header, notes, time, frequency = open_radiojove_spx(file_info, debug)
