@@ -1,5 +1,11 @@
-#! /usr/bin/python
-import numpy 
+#! /usr/bin/env python
+# -*- coding: latin-1 -*-
+
+"""
+Python module to read RadioJOVE SPS and SPD raw data files
+"""
+
+import numpy as np
 import os
 import struct
 import pprint as pp
@@ -8,9 +14,29 @@ from astropy import time as astime
 from spacepy import pycdf
 import json
 
+__author__ = "Baptiste Cecconi"
+__date__ = "10-JUL-2017"
+__version__ = "0.10"
+
+__all__ = ["spx_to_cdf"]
+
 
 ################################################################################
-# Loading local config file 
+# Defining the generic class for RadioJove Data
+# (to be linked with MASER data class in future)
+################################################################################
+class RadioJoveData:
+    """
+    Class for RadioJove data
+    """
+
+    def __init__(self, header, data):
+        self.header = header
+        self.data = data
+
+
+################################################################################
+# Loading local config file
 ################################################################################
 def load_local_config(config_file, debug=False):
     """
@@ -103,7 +129,7 @@ def extract_radiojove_sps_notes(raw_notes, debug=False):
     if debug:
         print "### [extract_radiojove_sps_notes]"
     
-    notes = {}
+    notes = dict()
 
     # The header notes are composed of a series of key and value (KV) pairs.
     # The raw notes start with a free text space.
@@ -406,10 +432,10 @@ def open_radiojove_spx(file_info, debug=False):
         file_info['bytes_per_step'] = (header['nfreq'] * header['nfeed'] + 1) * 2
         file_info['data_format'] = '>%sH' % (file_info['bytes_per_step']/2)
 
-        header['fmin'] = notes['LOWF']/1.E6   # MHz
-        header['fmax'] = notes['HIF']/1.E6    # MHz
-        frequency = header['fmax'] - (numpy.arange(header['nfreq']) / float(header['nfreq']) *
-                                      (header['fmax']-header['fmin']))
+        header['fmin'] = float(notes['LOWF'])/1.E6   # MHz
+        header['fmax'] = float(notes['HIF'])/1.E6    # MHz
+        frequency = [header['fmax'] - ifreq / header['nfreq'] * (header['fmax'] - header['fmin'])
+                     for ifreq in header['nfreq']]
 
     # SPD files
         
@@ -457,16 +483,16 @@ def open_radiojove_spx(file_info, debug=False):
 
     if header['file_type'] == 'SPS':
         time_step = (header['stop_jdtime']-header['start_jdtime']) / float(header['nstep'])
-        time = numpy.arange(header['nstep'])*time_step+header['start_jdtime']
+        time = [istep * time_step + header['start_jdtime'] for istep in header['nstep']]
     elif header['file_type'] == 'SPD':
         # if notes['NO_TIME_STAMPS_FLAG']:
         time_step = (header['stop_jdtime']-header['start_jdtime']) / float(header['nstep'])
-        time = numpy.arange(header['nstep'])*time_step+header['start_jdtime']
+        time = [istep * time_step + header['start_jdtime'] for istep in header['nstep']]
         # else:
-        # time = numpy.array()
+        # time = np.array()
         # for i in range(header['nstep']):
         #     time.append(data_raw[i][0])
-        # time_step = numpy.median(time[1:header['nstep']]-time[0:header['nstep']-1])
+        # time_step = np.median(time[1:header['nstep']]-time[0:header['nstep']-1])
     else:
         time = 0.
         time_step = 0.
@@ -693,9 +719,9 @@ def write_gattr_radiojove_cdf(cdfout, header, time, freq, config, debug=False):
     cdfout.attrs['VESPA_time_sampling_step'] = header['time_step']
     cdfout.attrs['VESPA_time_exp'] = header['time_integ']
 
-    cdfout.attrs['VESPA_spectral_range_min'] = numpy.amin(freq)*1e6
-    cdfout.attrs['VESPA_spectral_range_max'] = numpy.amax(freq)*1e6
-    cdfout.attrs['VESPA_spectral_sampling_step'] = numpy.median([freq[i+1]-freq[i] for i in range(len(freq)-1)])*1e6
+    cdfout.attrs['VESPA_spectral_range_min'] = np.amin(freq)*1e6
+    cdfout.attrs['VESPA_spectral_range_max'] = np.amax(freq)*1e6
+    cdfout.attrs['VESPA_spectral_sampling_step'] = np.median([freq[i+1]-freq[i] for i in range(len(freq)-1)])*1e6
     cdfout.attrs['VESPA_spectral_resolution'] = 50.e3
 
     cdfout.attrs['VESPA_instrument_host_name'] = header['obsty_id']
@@ -843,7 +869,7 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
 
         # We deal with EDR data (direct output from experiment) in Unsigned 2-byte integers.
         #   PDS-CDF requires no compression for variables.
-        cdfout.new(var_name, data=numpy.zeros((nt, nf)), type=pycdf.const.CDF_UINT2,
+        cdfout.new(var_name, data=np.zeros((nt, nf)), type=pycdf.const.CDF_UINT2,
                    compress=pycdf.const.NO_COMPRESSION)
         cdfout[var_name].attrs['CATDESC'] = header['feeds'][i]['CATDESC']
         cdfout[var_name].attrs['DEPEND_0'] = "EPOCH"
@@ -879,13 +905,10 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
             else: 
                 print "Loading records #{} to #{}".format(j1, j2)
         
-        data_raw = numpy.array(read_radiojove_spx_sweep(file_info,
-                                                        j2-j1,
-                                                        debug))[:,
-                                                                file_info['record_data_offset']:
-                                                                file_info['record_data_offset'] +
-                                                                header['nfreq']*header['nfeed']
-                                                                ].reshape(j2-j1, header['nfreq'], header['nfeed'])
+        data_raw = np.array(read_radiojove_spx_sweep(file_info, j2-j1, debug))[:,
+                   file_info['record_data_offset']:file_info['record_data_offset'] +
+                                                   header['nfreq']*header['nfeed']
+                   ].reshape(j2-j1, header['nfreq'], header['nfeed'])
                 
         for i in range(header['nfeed']):
             cdfout[header['feeds'][i]['FIELDNAM']][j1:j2, :] = data_raw[:, :, i]
