@@ -380,10 +380,12 @@ def open_radiojove_spx(file_info, debug=False):
     if header['obsname'] == 'AJ4CO DPS':
         header['obsty_id'] = 'AJ4CO'
         header['instr_id'] = 'DPS'
-        header['gain0'] = 1.95
-        header['gain1'] = 1.95
-        header['offset0'] = 1975
-        header['offset1'] = 1975
+        header['gain0'] = notes['COLORGAIN'][0]
+        header['gain1'] = notes['COLORGAIN'][1]
+        header['offset0'] = notes['COLOROFFSET'][0]
+        header['offset1'] = notes['COLOROFFSET'][1]
+        header['banner0'] = notes['BANNER'][0].replace('<DATE>',header['start_time'].date().isoformat())
+        header['banner1'] = notes['BANNER'][1].replace('<DATE>',header['start_time'].date().isoformat())
     else:
         header['obsty_id'] = 'ABCDE'
         header['instr_id'] = 'XXX'
@@ -412,25 +414,47 @@ def open_radiojove_spx(file_info, debug=False):
     # SPS files
     header['feeds'] = {}
 
+    feed_tmp = {'RR': {'FIELDNAM': 'RR', 'CATDESC': 'RCP Flux Density', 'LABLAXIS': 'RCP Power Spectral Density'},
+                'LL': {'FIELDNAM': 'LL', 'CATDESC': 'LCP Flux Density', 'LABLAXIS': 'LCP Power Spectral Density'}}
+
     if header['file_type'] == 'SPS':
         header['nfreq'] = header['nchannels']
         if notes['DUALSPECFILE']:
+
             header['nfeed'] = 2
-            header['feeds'][0] = {}
-            header['feeds'][0]['FIELDNAM'] = 'RR'
-            header['feeds'][0]['CATDESC'] = 'RCP Flux Density'
-            header['feeds'][0]['LABLAXIS'] = 'RCP Power Spectral Density'
-            header['feeds'][1] = {}
-            header['feeds'][1]['FIELDNAM'] = 'LL'
-            header['feeds'][1]['CATDESC'] = 'LCP Flux Density'
-            header['feeds'][1]['LABLAXIS'] = 'LCP Power Spectral Density'
+
+            if 'banner0' in header.keys():
+
+                if 'RCP' in header['banner0']:
+                    header['feeds'][0] = feed_tmp['RR']
+                if 'LCP' in header['banner0']:
+                    header['feeds'][0] = feed_tmp['LL']
+
+                if 'RCP' in header['banner1']:
+                    header['feeds'][1] = feed_tmp['RR']
+                if 'LCP' in header['banner1']:
+                    header['feeds'][1] = feed_tmp['LL']
+
+            else:
+
+                header['feeds'][0] = feed_tmp['RR']
+                header['feeds'][1] = feed_tmp['LL']
+
         else:
+
             header['nfeed'] = 1
-            header['feeds'][0] = {}
-            header['feeds'][0]['FIELDNAM'] = 'RR'
-            header['feeds'][0]['CATDESC'] = 'RCP Flux Density'
-            header['feeds'][0]['LABLAXIS'] = 'RCP Power Spectral Density'
-        
+
+            if 'banner0' in header.keys():
+
+                if 'RCP' in header['banner0']:
+                    header['feeds'][0] = feed_tmp['RR']
+                if 'LCP' in header['banner0']:
+                    header['feeds'][0] = feed_tmp['LL']
+
+            else:
+
+                header['feeds'][0] = feed_tmp['RR']
+
         file_info['bytes_per_step'] = (header['nfreq'] * header['nfeed'] + 1) * 2
         file_info['data_format'] = '>%sH' % (file_info['bytes_per_step']/2)
 
