@@ -96,9 +96,11 @@ def load_radiojove_spx_header(hdr_raw, debug=False):
     hdr_values = struct.unpack(hdr_fmt, hdr_raw[0:156])
     
     header = dict(sft=hdr_values[0])
-    header['start_jdtime'] = hdr_values[1]-0.5+2415020       # + julday(1,0,1900)
+    # date conversion: header dates are given in decimal days since 30/12/1899 00:00 (early morning!) == day 0.0
+    # date values must be corrected by adding 2415018.5 = julian date 30/12/1899 00:00
+    header['start_jdtime'] = hdr_values[1] + 2415018.5
     header['start_time'] = astime.Time(header['start_jdtime'], format='jd').datetime
-    header['stop_jdtime'] = hdr_values[2]-0.5+2415020        # + julday(1,0,1900)
+    header['stop_jdtime'] = hdr_values[2] + 2415018.5
     header['stop_time'] = astime.Time(header['stop_jdtime'], format='jd').datetime
     header['latitude'] = hdr_values[3]
     header['longitude'] = hdr_values[4]
