@@ -434,7 +434,7 @@ def open_radiojove_spx(file_info, debug=False):
 
         header['fmin'] = float(notes['LOWF'])/1.E6   # MHz
         header['fmax'] = float(notes['HIF'])/1.E6    # MHz
-        frequency = [header['fmax'] - ifreq / header['nfreq'] * (header['fmax'] - header['fmin'])
+        frequency = [header['fmax'] - float(ifreq) / (header['nfreq']-1) * (header['fmax'] - header['fmin'])
                      for ifreq in range(header['nfreq'])]
 
     # SPD files
