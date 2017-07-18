@@ -18,7 +18,7 @@ __author__ = "Baptiste Cecconi"
 __date__ = "10-JUL-2017"
 __version__ = "0.10"
 
-__all__ = ["spx_to_cdf"]
+__all__ = ["spx_to_cdf", "display_header"]
 
 
 ################################################################################
@@ -435,7 +435,7 @@ def open_radiojove_spx(file_info, debug=False):
         header['fmin'] = float(notes['LOWF'])/1.E6   # MHz
         header['fmax'] = float(notes['HIF'])/1.E6    # MHz
         frequency = [header['fmax'] - ifreq / header['nfreq'] * (header['fmax'] - header['fmin'])
-                     for ifreq in header['nfreq']]
+                     for ifreq in range(header['nfreq'])]
 
     # SPD files
         
@@ -483,11 +483,11 @@ def open_radiojove_spx(file_info, debug=False):
 
     if header['file_type'] == 'SPS':
         time_step = (header['stop_jdtime']-header['start_jdtime']) / float(header['nstep'])
-        time = [istep * time_step + header['start_jdtime'] for istep in header['nstep']]
+        time = [istep * time_step + header['start_jdtime'] for istep in range(header['nstep'])]
     elif header['file_type'] == 'SPD':
         # if notes['NO_TIME_STAMPS_FLAG']:
         time_step = (header['stop_jdtime']-header['start_jdtime']) / float(header['nstep'])
-        time = [istep * time_step + header['start_jdtime'] for istep in header['nstep']]
+        time = [istep * time_step + header['start_jdtime'] for istep in range(header['nstep'])]
         # else:
         # time = np.array()
         # for i in range(header['nstep']):
@@ -739,11 +739,15 @@ def write_gattr_radiojove_cdf(cdfout, header, time, freq, config, debug=False):
     cdfout.attrs['RadioJOVE_chartmin'] = header['chartmin']
     cdfout.attrs['RadioJOVE_chartmax'] = header['chartmax']
     cdfout.attrs['RadioJOVE_nchannels'] = header['nfeed']
+
     cdfout.attrs['RadioJOVE_rcvr'] = -1
     cdfout.attrs['RadioJOVE_banner0'] = ""
     cdfout.attrs['RadioJOVE_banner1'] = ""
     cdfout.attrs['RadioJOVE_antenna_type'] = ""
-    cdfout.attrs['RadioJOVE_antenna_orientation'] = ""
+    cdfout.attrs['RadioJOVE_antenna_beam_az'] = 0
+    cdfout.attrs['RadioJOVE_antenna_beam_el'] = 0
+    cdfout.attrs['RadioJOVE_antenna_polar0'] = ""
+    cdfout.attrs['RadioJOVE_antenna_polar1'] = ""
     cdfout.attrs['RadioJOVE_color_file'] = ""
     cdfout.attrs['RadioJOVE_color_offset0'] = header['offset0']
     cdfout.attrs['RadioJOVE_color_offset1'] = header['offset1']
@@ -904,11 +908,11 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
                 print "Loading record #{}".format(j)        
             else: 
                 print "Loading records #{} to #{}".format(j1, j2)
-        
-        data_raw = np.array(read_radiojove_spx_sweep(file_info, j2-j1, debug))[:,
-                   file_info['record_data_offset']:file_info['record_data_offset'] +
-                                                   header['nfreq']*header['nfeed']
-                   ].reshape(j2-j1, header['nfreq'], header['nfeed'])
+
+        data_raw = np.array(
+            read_radiojove_spx_sweep(file_info, j2-j1, debug))[
+                :, file_info['record_data_offset']:file_info['record_data_offset']+header['nfreq']*header['nfeed']
+                ].reshape(j2-j1, header['nfreq'], header['nfeed'])
                 
         for i in range(header['nfeed']):
             cdfout[header['feeds'][i]['FIELDNAM']][j1:j2, :] = data_raw[:, :, i]
@@ -933,6 +937,12 @@ def obs_description(obsty, instr, debug=False):
     # At the moment, only AJ4CO/DPS has been tested.
     if instr.upper() == 'DPS':
         desc = "{} Dual Polarization Spectrograph".format(desc)
+    elif instr.upper() == "TWB":
+        desc = "{} Tunable Wide Band Receiver".format(desc)
+    elif instr.upper() == "RSP":
+        desc = "{} RadioJOVE kit".format(desc)
+    else:
+        desc = "{} {} Spectrograph".format(desc, instr.upper())
     return desc
     
 
