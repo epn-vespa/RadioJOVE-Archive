@@ -625,7 +625,40 @@ def check_radiojove_cdf(file_info, config, debug=False):
         verb = '-v'
     else:
         verb = ''
-    os.system("{}cdfcheck {} {}{}".format(config['path']['pds'], verb, config['path']['out'], file_info['cdfout_file']))
+
+    command = "{}cdfcheck {} {}{}".format(config['path']['pds'], verb, config['path']['out'], file_info['cdfout_file'])
+
+    if debug:
+        print command
+
+    os.system(command)
+
+
+################################################################################
+# Check CDF file with PDS script
+################################################################################
+def fix_radiojove_cdf(file_info, config, debug=False):
+    """
+    Fix the compliance of the CDF file with PDS archive standard quality
+    :param file_info: a dictionary containing the input file information
+    :param config: a dictionary containing the local path configuration
+    :param debug: Set to True to have verbose output
+    :return:
+    """
+    if debug:
+        print "### [fix_radiojove_cdf]"
+
+    command = "{}cdfconvert {} {}{} /tmp/tmp.cdf".format(config['path']['cdf'],
+                                                      config['path']['out'],
+                                                      file_info['cdfout_file'])
+    if debug:
+        print command
+    os.system(command)
+
+    command = "mv /tmp/tmp.cdf {}{}".format(config['path']['out'], file_info['cdfout_file'])
+    if debug:
+        print command
+    os.system(command)
 
 
 ################################################################################
@@ -1241,6 +1274,7 @@ def spx_to_cdf_daily(file_list, config, debug=False):
 
     close_radiojove_cdf(cdfout, debug)
 
+    fix_radiojove_cdf(file_info[0], config)
     check_radiojove_cdf(file_info[0], config)
 
 
