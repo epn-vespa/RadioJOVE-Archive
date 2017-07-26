@@ -648,7 +648,7 @@ def fix_radiojove_cdf(file_info, config, debug=False):
     if debug:
         print "### [fix_radiojove_cdf]"
 
-    command = "{}cdfconvert {} {}{} /tmp/tmp.cdf".format(config['path']['cdf'],
+    command = "{}cdfconvert {}{} /tmp/tmp.cdf".format(config['path']['bin'],
                                                       config['path']['out'],
                                                       file_info['cdfout_file'])
     if debug:
@@ -1274,8 +1274,8 @@ def spx_to_cdf_daily(file_list, config, debug=False):
 
     close_radiojove_cdf(cdfout, debug)
 
-    fix_radiojove_cdf(file_info[0], config)
-    check_radiojove_cdf(file_info[0], config)
+    fix_radiojove_cdf(file_info[0], config, debug)
+    check_radiojove_cdf(file_info[0], config, debug)
 
 
 ################################################################################
