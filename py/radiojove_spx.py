@@ -926,8 +926,8 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
     for feed in header['feeds']:
         var_name = feed['FIELDNAM']
         var_name_list.append(var_name)
-
-        if var_name in cdfout.attrs.keys():
+        
+        if var_name in cdfout.keys():
             if debug:
                 print "Updating {} variable".format(var_name)
         else:
@@ -1137,7 +1137,6 @@ def merge_notes(notes0, notes1, debug=False):
         else:
             notes[kk] = notes1[kk]
 
-
         if debug:
             print notes[kk]
 
@@ -1186,7 +1185,6 @@ def spx_to_cdf_daily(file_list, config, debug=False):
 
             start_time = h_tmp['start_time']
             stop_time = h_tmp['stop_time']
-            time = t_tmp
 
         else:
 
@@ -1212,14 +1210,7 @@ def spx_to_cdf_daily(file_list, config, debug=False):
 
     for ii in range(nfiles):
         header = merge_headers(header, header_list[ii], debug=debug)
-        print('==========')
-        print("HEADER", ii, header)
-        print('==========')
         notes = merge_notes(notes, notes_list[ii], debug=debug)
-        print('==========')
-        print("NOTES", ii, notes)
-        print('==========')
-
         file_info[ii]['offset'] = len(time)
         time.extend(time_list[ii])
 
@@ -1235,7 +1226,7 @@ def spx_to_cdf_daily(file_list, config, debug=False):
     write_gattr_radiojove_cdf(cdfout, header, time, frequency, config, debug)
     write_epoch_radiojove_cdf(cdfout, time, debug)
 
-    write_data_radiojove_cdf(cdfout, header, file_info[0], config['proc']['packet_size'], debug)
+    write_data_radiojove_cdf(cdfout, header_list[0], file_info[0], config['proc']['packet_size'], debug)
 
     ### pass all file handles into file_info !!
 
@@ -1243,7 +1234,7 @@ def spx_to_cdf_daily(file_list, config, debug=False):
         if ii == 0:
             pass
         else:
-            write_data_radiojove_cdf(cdfout, header, file_info[ii], config[ii]['proc']['packet_size'], debug)
+            write_data_radiojove_cdf(cdfout, header_list[ii], file_info[ii], config['proc']['packet_size'], debug)
 
 
 ################################################################################
