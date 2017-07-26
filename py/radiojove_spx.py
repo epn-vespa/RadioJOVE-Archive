@@ -21,6 +21,10 @@ __version__ = "0.10"
 __all__ = ["spx_to_cdf", "display_header"]
 
 
+class RadioJoveError(Exception):
+    pass
+
+
 ################################################################################
 # Defining the generic class for RadioJove Data
 # (to be linked with MASER data class in future)
@@ -145,6 +149,7 @@ def extract_radiojove_sps_notes(raw_notes, debug=False):
     key_list = ['SWEEPS', 'LOWF', 'HIF', 'STEPS', 'RCVR', 'DUALSPECFILE', 'COLORRES', 'BANNER', 'ANTENNATYPE',
                 'ANTENNAORIENTATION', 'COLORFILE', 'COLOROFFSET', 'COLORGAIN', 'CORRECTIONFILENAME', 'CAXF',
                 'CAX1', 'CAX2', 'CLOCKMSG']
+    ## CHECK LIST WITH https://voparis-confluence.obspm.fr/display/JOVE/RadioSky+Spectrograph-SPS+Metadata
     
     # list of metadata keys with multiple values
     key_list_multi = ['BANNER', 'COLOROFFSET', 'COLORGAIN',  'CAXF', 'CAX1', 'CAX2', 'CLOCKMSG']
@@ -386,6 +391,9 @@ def open_radiojove_spx(file_info, debug=False):
         header['offset1'] = notes['COLOROFFSET'][1]
         header['banner0'] = notes['BANNER'][0].replace('<DATE>',header['start_time'].date().isoformat())
         header['banner1'] = notes['BANNER'][1].replace('<DATE>',header['start_time'].date().isoformat())
+        header['antenna_type'] = notes['ANTENNATYPE']
+        header['color_file'] = notes['COLORFILE']
+        header['free_text'] = notes['free_text']
     else:
         header['obsty_id'] = 'ABCDE'
         header['instr_id'] = 'XXX'
@@ -393,6 +401,11 @@ def open_radiojove_spx(file_info, debug=False):
         header['gain1'] = 2.00
         header['offset0'] = 2000
         header['offset1'] = 2000
+        header['banner0'] = ''
+        header['banner1'] = ''
+        header['antenna_type'] = ''
+        header['color_file'] = ''
+        header['free_text'] = ''
 
     if header['file_type'] == 'SPS':
         header['level'] = 'EDR'
@@ -412,10 +425,11 @@ def open_radiojove_spx(file_info, debug=False):
     # nstep = number of sweep (SPS) or time steps (SPD)
     
     # SPS files
-    header['feeds'] = {}
+    header['feeds'] = []
 
     feed_tmp = {'RR': {'FIELDNAM': 'RR', 'CATDESC': 'RCP Flux Density', 'LABLAXIS': 'RCP Power Spectral Density'},
-                'LL': {'FIELDNAM': 'LL', 'CATDESC': 'LCP Flux Density', 'LABLAXIS': 'LCP Power Spectral Density'}}
+                'LL': {'FIELDNAM': 'LL', 'CATDESC': 'LCP Flux Density', 'LABLAXIS': 'LCP Power Spectral Density'},
+                'S': {'FIELDNAM': 'S', 'CATDESC': 'Flux Density', 'LABLAXIS': 'Power Spectral Density'}}
 
     if header['file_type'] == 'SPS':
         header['nfreq'] = header['nchannels']
@@ -426,19 +440,28 @@ def open_radiojove_spx(file_info, debug=False):
             if 'banner0' in header.keys():
 
                 if 'RCP' in header['banner0']:
-                    header['feeds'][0] = feed_tmp['RR']
-                if 'LCP' in header['banner0']:
-                    header['feeds'][0] = feed_tmp['LL']
+                    header['polar0'] = 'RR'
+                elif 'LCP' in header['banner0']:
+                    header['polar0'] = 'LL'
+
+                else:
+                    header['polar0'] = 'S'
+
 
                 if 'RCP' in header['banner1']:
-                    header['feeds'][1] = feed_tmp['RR']
-                if 'LCP' in header['banner1']:
-                    header['feeds'][1] = feed_tmp['LL']
+                    header['polar1'] = 'RR'
+                elif 'LCP' in header['banner1']:
+                    header['polar1'] = 'LL'
+                else:
+                    header['polar1'] = 'S'
 
             else:
 
-                header['feeds'][0] = feed_tmp['RR']
-                header['feeds'][1] = feed_tmp['LL']
+                header['polar0'] = 'S'
+                header['polar1'] = 'S'
+
+            header['feeds'].append(feed_tmp[header['polar0']])
+            header['feeds'].append(feed_tmp[header['polar1']])
 
         else:
 
@@ -447,13 +470,17 @@ def open_radiojove_spx(file_info, debug=False):
             if 'banner0' in header.keys():
 
                 if 'RCP' in header['banner0']:
-                    header['feeds'][0] = feed_tmp['RR']
-                if 'LCP' in header['banner0']:
-                    header['feeds'][0] = feed_tmp['LL']
+                    header['polar0'] = 'RR'
+                elif 'LCP' in header['banner0']:
+                    header['polar0'] = 'RR'
+                else:
+                    header['polar0'] = 'S'
 
             else:
 
-                header['feeds'][0] = feed_tmp['RR']
+                header['polar0'] = 'S'
+
+            header['feeds'].append(feed_tmp[header['polar0']])
 
         file_info['bytes_per_step'] = (header['nfreq'] * header['nfeed'] + 1) * 2
         file_info['data_format'] = '>%sH' % (file_info['bytes_per_step']/2)
@@ -725,7 +752,10 @@ def write_gattr_radiojove_cdf(cdfout, header, time, freq, config, debug=False):
                                       "by NASA/PDS/PPI and PADC at Observatoire de Paris (France)."
     cdfout.attrs['ADID_ref'] = ""
     cdfout.attrs['Validate'] = ""
-    cdfout.attrs['Parent'] = os.path.basename(header['file_name'])
+    if isinstance(header['file_name'], str):
+        cdfout.attrs['Parent'] = os.path.basename(header['file_name'])
+    else:
+        cdfout.attrs['Parent'] = [os.path.basename(item) for item in header['file_name']]
     cdfout.attrs['Software_language'] = 'python'
 
     # SETTING PDS GLOBAL ATTRIBUTES
@@ -767,14 +797,14 @@ def write_gattr_radiojove_cdf(cdfout, header, time, freq, config, debug=False):
     cdfout.attrs['RadioJOVE_nchannels'] = header['nfeed']
 
     cdfout.attrs['RadioJOVE_rcvr'] = -1
-    cdfout.attrs['RadioJOVE_banner0'] = ""
-    cdfout.attrs['RadioJOVE_banner1'] = ""
-    cdfout.attrs['RadioJOVE_antenna_type'] = ""
+    cdfout.attrs['RadioJOVE_banner0'] = header['banner0']
+    cdfout.attrs['RadioJOVE_banner1'] = header['banner1']
+    cdfout.attrs['RadioJOVE_antenna_type'] = header['antenna_type']
     cdfout.attrs['RadioJOVE_antenna_beam_az'] = 0
     cdfout.attrs['RadioJOVE_antenna_beam_el'] = 0
-    cdfout.attrs['RadioJOVE_antenna_polar0'] = ""
-    cdfout.attrs['RadioJOVE_antenna_polar1'] = ""
-    cdfout.attrs['RadioJOVE_color_file'] = ""
+    cdfout.attrs['RadioJOVE_antenna_polar0'] = header['polar0']
+    cdfout.attrs['RadioJOVE_antenna_polar1'] = header['polar1']
+    cdfout.attrs['RadioJOVE_color_file'] = header['color_file']
     cdfout.attrs['RadioJOVE_color_offset0'] = header['offset0']
     cdfout.attrs['RadioJOVE_color_offset1'] = header['offset1']
     cdfout.attrs['RadioJOVE_color_gain0'] = header['gain0']
@@ -890,39 +920,49 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
 
     nt = header['nstep']  # len(time)
     nf = header['nfreq']  # len(freq)
-    
+
+    var_name_list = []
     # defining variables
-    for i in header['feeds'].keys():
-        var_name = header['feeds'][i]['FIELDNAM']
-        if debug:
-            print "Creating {} variable".format(var_name)
+    for feed in header['feeds']:
+        var_name = feed['FIELDNAM']
+        var_name_list.append(var_name)
+
+        if var_name in cdfout.attrs.keys():
+            if debug:
+                print "Updating {} variable".format(var_name)
+        else:
+            if debug:
+                print "Creating {} variable".format(var_name)
 
         # We deal with EDR data (direct output from experiment) in Unsigned 2-byte integers.
         #   PDS-CDF requires no compression for variables.
-        cdfout.new(var_name, data=np.zeros((nt, nf)), type=pycdf.const.CDF_UINT2,
-                   compress=pycdf.const.NO_COMPRESSION)
-        cdfout[var_name].attrs['CATDESC'] = header['feeds'][i]['CATDESC']
-        cdfout[var_name].attrs['DEPEND_0'] = "EPOCH"
-        cdfout[var_name].attrs['DEPEND_1'] = "FREQUENCY"
-        cdfout[var_name].attrs['DICT_KEY'] = "electric_field>power"
-        cdfout[var_name].attrs['DISPLAY_TYPE'] = "spectrogram"
-        cdfout[var_name].attrs['FIELDNAM'] = var_name
-        cdfout[var_name].attrs.new('FILLVAL', data=65535, type=pycdf.const.CDF_UINT2)
-        cdfout[var_name].attrs['FORMAT'] = "E12.2"
-        cdfout[var_name].attrs['LABLAXIS'] = header['feeds'][i]['LABLAXIS']
-        cdfout[var_name].attrs['UNITS'] = "ADU" 
-        cdfout[var_name].attrs.new('VALIDMIN', data=0, type=pycdf.const.CDF_UINT2)
-        cdfout[var_name].attrs.new('VALIDMAX', data=4096, type=pycdf.const.CDF_UINT2)
-        cdfout[var_name].attrs['VAR_TYPE'] = "data"
-        cdfout[var_name].attrs['SCALETYP'] = "linear"
-        cdfout[var_name].attrs.new('SCALEMIN', data=2050, type=pycdf.const.CDF_UINT2)
-        cdfout[var_name].attrs.new('SCALEMAX', data=2300, type=pycdf.const.CDF_UINT2)
-        cdfout[var_name].attrs['FORMAT'] = "E12.2"
-        cdfout[var_name].attrs['FORM_PTR'] = ""
-        cdfout[var_name].attrs['SI_CONVERSION'] = " "
-        cdfout[var_name].attrs['UCD'] = "phys.flux;em.radio"
+            cdfout.new(var_name, data=np.zeros((nt, nf)), type=pycdf.const.CDF_UINT2,
+                       compress=pycdf.const.NO_COMPRESSION)
+            cdfout[var_name].attrs['CATDESC'] = feed['CATDESC']
+            cdfout[var_name].attrs['DEPEND_0'] = "EPOCH"
+            cdfout[var_name].attrs['DEPEND_1'] = "FREQUENCY"
+            cdfout[var_name].attrs['DICT_KEY'] = "electric_field>power"
+            cdfout[var_name].attrs['DISPLAY_TYPE'] = "spectrogram"
+            cdfout[var_name].attrs['FIELDNAM'] = var_name
+            cdfout[var_name].attrs.new('FILLVAL', data=65535, type=pycdf.const.CDF_UINT2)
+            cdfout[var_name].attrs['FORMAT'] = "E12.2"
+            cdfout[var_name].attrs['LABLAXIS'] = feed['LABLAXIS']
+            cdfout[var_name].attrs['UNITS'] = "ADU"
+            cdfout[var_name].attrs.new('VALIDMIN', data=0, type=pycdf.const.CDF_UINT2)
+            cdfout[var_name].attrs.new('VALIDMAX', data=4096, type=pycdf.const.CDF_UINT2)
+            cdfout[var_name].attrs['VAR_TYPE'] = "data"
+            cdfout[var_name].attrs['SCALETYP'] = "linear"
+            cdfout[var_name].attrs.new('SCALEMIN', data=2050, type=pycdf.const.CDF_UINT2)
+            cdfout[var_name].attrs.new('SCALEMAX', data=2300, type=pycdf.const.CDF_UINT2)
+            cdfout[var_name].attrs['FORMAT'] = "E12.2"
+            cdfout[var_name].attrs['FORM_PTR'] = ""
+            cdfout[var_name].attrs['SI_CONVERSION'] = " "
+            cdfout[var_name].attrs['UCD'] = "phys.flux;em.radio"
 
     # reading sweeps structure
+    if debug:
+        print "Loading data into {} variable(s), from {}".format(', '.join(var_name_list), file_info['name'])
+
     for j in range(0, header['nstep'], packet_size):
         j1 = j
         j2 = j+packet_size
@@ -941,7 +981,7 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
                 ].reshape(j2-j1, header['nfreq'], header['nfeed'])
                 
         for i in range(header['nfeed']):
-            cdfout[header['feeds'][i]['FIELDNAM']][j1:j2, :] = data_raw[:, :, i]
+            cdfout[header['feeds'][i]['FIELDNAM']][file_info['offset']+j1:file_info['offset']+j2, :] = data_raw[:, :, i]
 
 
 ################################################################################
@@ -973,33 +1013,258 @@ def obs_description(obsty, instr, debug=False):
     
 
 ################################################################################
-# Main SPX to CDF 
+# Merge SPS or SPD headers
 ################################################################################
-def spx_to_cdf(file_spx, config_file='local_config_bc.json', daily=False, debug=False):
+def merge_headers(header0, header1, debug=False):
     """
-    Main script that transforms an SPS or SPD file into a CDF file
-    :param file_spx: path of input SPS or SPD file
-    :param config_file: path of local configuration file
-    :param daily: Set to true to output daily files (CDF name contains only the date)
+
+    :param header0:
+    :param header1:
+    :return:
+    """
+
+    header = header0.copy()
+
+    for kk in header1.keys():
+
+        if debug:
+            print "Merging header: key = {}".format(kk)
+
+        if kk in header0.keys():
+
+            if kk.endswith('time'):
+
+                if kk.startswith('start'):
+
+                    if header0[kk] > header1[kk]:
+                        header[kk] = header1[kk]
+                    else:
+                        header[kk] = header0[kk]
+
+                if kk.startswith('stop'):
+
+                    if header0[kk] > header1[kk]:
+                        header[kk] = header0[kk]
+                    else:
+                        header[kk] = header1[kk]
+
+            elif kk == "time_step":
+
+                header[kk] = (header0[kk] + header1[kk]) / 2
+
+            elif kk == "time_integ":
+
+                header[kk] = (header0[kk] + header1[kk]) / 2
+
+            elif kk == "nstep":
+
+                header[kk] = header0[kk] + header1[kk]
+
+            elif header0[kk] != header1[kk]:
+
+                if not isinstance(header0[kk], list):
+                    header[kk] = [header0[kk]]
+
+                if isinstance(header1[kk], list):
+                    header[kk].extend(header1[kk])
+                else:
+                    header[kk].append(header1[kk])
+
+                print "Warning, merging mismatched header['{}']".format(kk)
+                print "Header0:"
+                print header0[kk]
+                print "Header1:"
+                print header1[kk]
+
+        else:
+
+            header[kk] = header1[kk]
+
+        if debug:
+            print "Merged header:"
+            print header[kk]
+
+    return header
+
+
+################################################################################
+# Merge SPS or SPD notes
+################################################################################
+def merge_notes(notes0, notes1, debug=False):
+    """
+
+    :param notes0:
+    :param notes1:
+    :return:
+    """
+
+    notes = notes0.copy()
+
+    for kk in notes1.keys():
+
+        if debug:
+            print "Merging notes: key = {}".format(kk)
+
+        if kk in notes0.keys():
+
+            if kk == "SWEEPS":
+
+                notes[kk] = notes0[kk] + notes1[kk]
+
+            elif notes0[kk] != notes1[kk]:
+
+                if not isinstance(notes0[kk], list):
+                    notes[kk] = [notes0[kk]]
+
+                if isinstance(notes1[kk], list):
+                    notes[kk].extend(notes1[kk])
+                else:
+                    notes[kk].append(notes1[kk])
+
+                if kk == "ANTENNATYPE" and len(notes[kk]) > 1:
+                    if 'unknown' in notes[kk]:
+                        notes[kk].remove('unknown')
+
+                print "Warning, merging mismatched notes['{}']".format(kk)
+                print "Notes0:"
+                print notes0[kk]
+                print "Notes1:"
+                print notes1[kk]
+
+            else:
+                pass
+
+        else:
+            notes[kk] = notes1[kk]
+
+
+        if debug:
+            print notes[kk]
+
+    return notes
+
+
+################################################################################
+# SPX to CDF Conversion for daily set of files
+################################################################################
+def spx_to_cdf_daily(file_list, config, debug=False):
+    """
+    Computes CDF file from a set of SPS or SPD file(s) on the same day
+    :param file_list: list of files to process
+    :param config:
     :param debug: Set to True to have verbose output
     :return:
     """
-    if debug:
-        print "### [spx_to_cdf]"
 
-    # setting up local paths, versions and processing parameters
-    config = load_local_config(config_file, debug)
+    nfiles = len(file_list)
 
-    # file_sps='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/spectrogram/AJ4CO_DPS_150101071000_corrected_using_CA_2014_12_18_B.sps'
-    # file_spd='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/timeseries/AJ4CO_RSP_UT150101000009.spd'
+    file_info = list()
+    for item in file_list:
+        file_info.append({'daily': True, 'name': item})
 
-    # initialization file_info dictionary
-    file_info = dict(name=file_spx)
-    file_info['daily'] = daily  # True or False(=default)
+
+    # Checking file set consistency
+
+    header_list = list()
+    notes_list = list()
+    time_list = list()
+    frequency_list = list()
+
+    for ii in range(nfiles):
+        # Opening file, initializing file info and loading header + notes
+        h_tmp, n_tmp, t_tmp, f_tmp = open_radiojove_spx(file_info[ii], debug)
+
+        header_list.append(h_tmp)
+        notes_list.append(n_tmp)
+        time_list.append(t_tmp)
+        frequency_list.append(f_tmp)
+
+        if debug:
+            print "{}: {} to {}".format(ii, h_tmp['start_time'].isoformat(), h_tmp['stop_time'].isoformat())
+
+        if ii == 0:
+
+            start_time = h_tmp['start_time']
+            stop_time = h_tmp['stop_time']
+            time = t_tmp
+
+        else:
+
+            if h_tmp['start_time'] < stop_time:
+                raise RadioJoveError("Overlaping Files")
+            else:
+                stop_time = h_tmp['stop_time']
+
+        if debug:
+            print "all: {} to {}".format(start_time.isoformat(),stop_time.isoformat())
+
+    if stop_time - start_time > datetime.timedelta(hours=24):
+        raise RadioJoveError("Data interval > 24h")
+
+    if start_time.date() != stop_time.date():
+        raise RadioJoveError("Files Not On Same Date")
+
+    # merging headers
+    header = dict()
+    notes = dict()
+    time = list()
+    frequency = frequency_list[0]
+
+    for ii in range(nfiles):
+        header = merge_headers(header, header_list[ii], debug=debug)
+        print('==========')
+        print("HEADER", ii, header)
+        print('==========')
+        notes = merge_notes(notes, notes_list[ii], debug=debug)
+        print('==========')
+        print("NOTES", ii, notes)
+        print('==========')
+
+        file_info[ii]['offset'] = len(time)
+        time.extend(time_list[ii])
+
+        if set(frequency) != set(frequency_list[ii]):
+            raise RadioJoveError("Inconsistent Frequency list {}".format(ii))
+
+    # Fixing duplicate headers
+
+    # Processing files
+
+    # initializing CDF file
+    cdfout = init_radiojove_cdf(file_info[0], header, time[0], config, debug)
+    write_gattr_radiojove_cdf(cdfout, header, time, frequency, config, debug)
+    write_epoch_radiojove_cdf(cdfout, time, debug)
+
+    write_data_radiojove_cdf(cdfout, header, file_info[0], config['proc']['packet_size'], debug)
+
+    ### pass all file handles into file_info !!
+
+    for ii in range(nfiles):
+        if ii == 0:
+            pass
+        else:
+            write_data_radiojove_cdf(cdfout, header, file_info[ii], config[ii]['proc']['packet_size'], debug)
+
+
+################################################################################
+# SPX to CDF Conversion for single files
+################################################################################
+def spx_to_cdf_single(file_spx, config, debug=False):
+    """
+
+    :param file_spx:
+    :param config:
+    :param debug:
+    :return:
+    """
+
+    file_info = dict(daily=False)
+    file_info['name'] = file_spx
+    file_info['offset'] = 0
 
     # Opening file, initializing file info and loading header + notes
     header, notes, time, frequency = open_radiojove_spx(file_info, debug)
-    
+
     # initializing CDF file
     cdfout = init_radiojove_cdf(file_info, header, time[0], config, debug)
 
@@ -1009,5 +1274,58 @@ def spx_to_cdf(file_spx, config_file='local_config_bc.json', daily=False, debug=
     write_frequency_radiojove_cdf(cdfout, header, frequency, debug)
 
     close_radiojove_cdf(cdfout, debug)
-    
+
     check_radiojove_cdf(file_info, config)
+
+
+################################################################################
+# Main SPX to CDF 
+################################################################################
+def spx_to_cdf(file_spx, config_file='local_config_bc.json', daily=False, debug=False):
+    """
+    Main script that transforms an SPS or SPD file(s) into a CDF file(s)
+    :param file_spx: path of input SPS or SPD file(s)
+    :param config_file: path of local configuration file
+    :param daily: Set to True to output daily file (CDF name contains only the date)
+    :param debug: Set to True to have verbose output
+    :return:
+    """
+    if debug:
+        print "### [spx_to_cdf]"
+
+    try:
+        # setting up local paths, versions and processing parameters
+        config = load_local_config(config_file, debug)
+
+        # file_sps='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/spectrogram/AJ4CO_DPS_150101071000_corrected_using_CA_2014_12_18_B.sps'
+        # file_spd='/Users/baptiste/Projets/VOParis/RadioJove/data/CDF/data/dat/V01/timeseries/AJ4CO_RSP_UT150101000009.spd'
+
+        # if daily => a list of files is passed in file_spx
+        if isinstance(file_spx, str):
+            file_list = [file_spx]
+        elif isinstance(file_spx, list):
+            file_list = file_spx
+        else:
+            raise RadioJoveError("Wrong Input (must be single path to file (string) or list of paths).")
+        nfiles = len(file_list)
+
+        file_info = dict(daily=daily)
+        file_info['name'] = ''
+
+        if daily:
+
+            spx_to_cdf_daily(file_list, config, debug)
+
+        else:
+
+            if nfiles != 1:
+                raise RadioJoveError("Regular processing (not daily) must include a single file")
+            else:
+                spx_to_cdf_single(file_spx, config, debug)
+
+    except RadioJoveError as e:
+        print e
+
+
+
+
