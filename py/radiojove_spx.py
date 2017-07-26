@@ -765,7 +765,7 @@ def write_gattr_radiojove_cdf(cdfout, header, time, freq, config, debug=False):
     cdfout.attrs['PDS_Observation_type'] = 'Radio'
     
     # SETTING VESPA GLOBAL ATTRIBUTES
-    cdfout.attrs['VESPA_dataproduct_type'] = "DS>Dynamic Spectra"
+    cdfout.attrs['VESPA_dataproduct_type'] = "ds>Dynamic Spectra"
     cdfout.attrs['VESPA_target_class'] = "planet"
     cdfout.attrs['VESPA_target_region'] = "Magnetosphere"
     cdfout.attrs['VESPA_feature_name'] = "Radio Emissions#Aurora"
@@ -926,7 +926,7 @@ def write_data_radiojove_cdf(cdfout, header, file_info, packet_size, debug=False
     for feed in header['feeds']:
         var_name = feed['FIELDNAM']
         var_name_list.append(var_name)
-        
+
         if var_name in cdfout.keys():
             if debug:
                 print "Updating {} variable".format(var_name)
@@ -1070,6 +1070,10 @@ def merge_headers(header0, header1, debug=False):
                 else:
                     header[kk].append(header1[kk])
 
+                if kk == 'antenna_type' and len(header[kk]) > 1:
+                    if 'unknown' in header[kk]:
+                        header[kk].remove('unknown')
+
                 print "Warning, merging mismatched header['{}']".format(kk)
                 print "Header0:"
                 print header0[kk]
@@ -1161,7 +1165,6 @@ def spx_to_cdf_daily(file_list, config, debug=False):
     for item in file_list:
         file_info.append({'daily': True, 'name': item})
 
-
     # Checking file set consistency
 
     header_list = list()
@@ -1228,13 +1231,17 @@ def spx_to_cdf_daily(file_list, config, debug=False):
 
     write_data_radiojove_cdf(cdfout, header_list[0], file_info[0], config['proc']['packet_size'], debug)
 
-    ### pass all file handles into file_info !!
-
     for ii in range(nfiles):
         if ii == 0:
             pass
         else:
             write_data_radiojove_cdf(cdfout, header_list[ii], file_info[ii], config['proc']['packet_size'], debug)
+
+    write_frequency_radiojove_cdf(cdfout, header, frequency, debug)
+
+    close_radiojove_cdf(cdfout, debug)
+
+    check_radiojove_cdf(file_info[0], config)
 
 
 ################################################################################
