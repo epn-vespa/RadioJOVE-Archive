@@ -1,0 +1,19 @@
+{
+"path":
+	{
+	"cfg": "../config/",
+	"out": "/tmp/",
+	"bin": "/Applications/cdf/cdf/bin/",
+	"pds": "/Users/baptiste/Projets/VOParis/igpp-git/pds-cdf-1.0.11/bin/"
+	},
+"vers":
+	{
+	"cdf": "10",
+	"dat": "00",
+	"sft": "03"
+	},
+"proc":
+	{
+	"packet_size": 10000
+	}
+}
